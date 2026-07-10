@@ -93,6 +93,38 @@ export interface FlightState {
   arrival: ArrivalInfo;
 }
 
+/**
+ * A flight arriving INTO one of our supported airports (the mirror image of
+ * FlightState, which is a flight departing FROM one). Reuses the exact same
+ * gate-level/consensus intelligence for "how you'll get off the plane" -
+ * since the destination here is always one of our own registered airports,
+ * this side actually tends to have BETTER data than an outbound flight to an
+ * arbitrary, uncurated destination.
+ */
+export interface ArrivalFlightState {
+  id: string;
+  flightNumber: string;
+  airline: string;
+  /** IATA of where this flight departed from. */
+  origin: string;
+  originCity: string;
+  originName: string;
+  /** IATA of the airport this arrival record belongs to (one of our own). */
+  destination: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  status: FlightStatus;
+  terminal: string;
+  /** 'TBD' until published - usually not until closer to landing. */
+  gate: string;
+  aircraftType?: string;
+  disembark: MethodEstimate;
+  baggageBelt?: string;
+  baggageWaitMinutes: number;
+  lastUpdated: string;
+  dataSource: DataSource;
+}
+
 export type DataSource = 'live' | 'demo';
 
 export interface TrafficEstimate {

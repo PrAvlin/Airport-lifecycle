@@ -2,7 +2,7 @@ import { getOriginAirport, isKnownOrigin, ORIGIN_AIRPORTS, OriginAirport } from 
 import { getDestinationProfile } from './destinationAirports';
 import { boardingInputs, disembarkInputs, estimateAndRegister } from '../services/methodEstimate';
 import { estimateBaggageWaitMinutes, estimateSecurityWaitMinutes } from '../services/waitTimeEstimate';
-import { FlightState } from '../types';
+import { ArrivalFlightState, FlightState } from '../types';
 
 const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
 const BOARDING_LEAD_MINUTES = 30;
@@ -123,4 +123,58 @@ export function seedDemoFlights(): FlightState[] {
     }
   }
   return flights;
+}
+
+/**
+ * Demo-mode mirror of createMockFlight for the arrivals side: a flight
+ * landing INTO `airport` from some other domestic airport. Reuses the same
+ * gate-level intelligence for "how you'll get off the plane" since the
+ * destination is always one of our own registered airports here.
+ */
+export function createMockArrival(airport: OriginAirport, overrides: Partial<ArrivalFlightState> = {}): ArrivalFlightState {
+  const airline = pick(AIRLINES);
+  const originIata = pick(Object.keys(ORIGIN_AIRPORTS).filter((d) => d !== airport.iata));
+  const originAirport = getOriginAirport(originIata);
+  const arrivalInMinutes = 20 + Math.floor(Math.random() * 150);
+  const terminal = pick(Object.keys(airport.terminals));
+  const gate = pickGate(airport, terminal);
+  const flightNumber = randomFlightNumber(airline);
+  const estimatedArrival = minutesFromNow(arrivalInMinutes);
+
+  const id = `${airport.iata}_ARR_${flightNumber}_${estimatedArrival}`;
+  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(airport.iata, terminal, gate));
+
+  const arrival: ArrivalFlightState = {
+    id,
+    flightNumber,
+    airline,
+    origin: originIata,
+    originCity: originAirport.city,
+    originName: originAirport.name,
+    destination: airport.iata,
+    scheduledArrival: estimatedArrival,
+    estimatedArrival,
+    status: 'scheduled',
+    terminal,
+    gate,
+    aircraftType: pick(SHORT_HAUL_AIRCRAFT),
+    disembark,
+    baggageBelt: undefined,
+    baggageWaitMinutes: estimateBaggageWaitMinutes(),
+    lastUpdated: new Date().toISOString(),
+    dataSource: 'demo',
+  };
+
+  return { ...arrival, ...overrides };
+}
+
+export function seedDemoArrivals(): ArrivalFlightState[] {
+  const arrivals: ArrivalFlightState[] = [];
+  for (const airport of Object.values(ORIGIN_AIRPORTS)) {
+    const count = DEMO_COUNTS[airport.iata] ?? 4;
+    for (let i = 0; i < count; i++) {
+      arrivals.push(createMockArrival(airport));
+    }
+  }
+  return arrivals;
 }

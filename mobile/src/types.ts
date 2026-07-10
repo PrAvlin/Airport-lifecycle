@@ -64,6 +64,27 @@ export interface FlightState {
   arrival: ArrivalInfo;
 }
 
+export interface ArrivalFlightState {
+  id: string;
+  flightNumber: string;
+  airline: string;
+  origin: string;
+  originCity: string;
+  originName: string;
+  destination: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  status: FlightStatus;
+  terminal: string;
+  gate: string;
+  aircraftType?: string;
+  disembark: MethodEstimate;
+  baggageBelt?: string;
+  baggageWaitMinutes: number;
+  lastUpdated: string;
+  dataSource: DataSource;
+}
+
 export type FlightUpdateEventType =
   | 'status_change'
   | 'gate_change'

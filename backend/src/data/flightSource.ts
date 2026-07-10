@@ -1,8 +1,8 @@
 import { config } from '../config';
-import { DataSource, FlightState, FlightUpdateEvent, FlightUpdateEventType } from '../types';
-import { seedDemoFlights } from './flights';
+import { ArrivalFlightState, BoardingMethod, DataSource, FlightState, FlightUpdateEvent, FlightUpdateEventType } from '../types';
+import { seedDemoFlights, seedDemoArrivals } from './flights';
 import { isKnownOrigin, getOriginAirport } from './airports';
-import { fetchLiveDepartures } from '../services/aerodatabox';
+import { fetchLiveFlights } from '../services/aerodatabox';
 import { ReportPhase, submitReport } from '../services/boardingReports';
 import { recomputeEstimate } from '../services/methodEstimate';
 
@@ -11,6 +11,9 @@ type EventEmitter = (event: FlightUpdateEvent) => void;
 // Keyed by `${originIata}:${flightNumber}` — the same flight number can exist
 // out of two different airports on the same day.
 const store = new Map<string, FlightState>();
+// Keyed by `${destinationIata}:${flightNumber}` - arrivals INTO an airport,
+// the mirror of the departures store above.
+const arrivalStore = new Map<string, ArrivalFlightState>();
 let currentDataSource: DataSource = config.aerodatabox.enabled ? 'live' : 'demo';
 let lastError: string | null = null;
 let lastFetchedAt: string | null = null;
@@ -23,8 +26,8 @@ let broadcastEmitter: EventEmitter | null = null;
 const FETCH_CACHE_TTL_MS = 10 * 60_000;
 const lastFetchedByAirport = new Map<string, number>();
 
-function storeKey(origin: string, flightNumber: string): string {
-  return `${origin.toUpperCase()}:${flightNumber.toUpperCase()}`;
+function storeKey(airport: string, flightNumber: string): string {
+  return `${airport.toUpperCase()}:${flightNumber.toUpperCase()}`;
 }
 
 /** Set once at server startup so parts of the app outside the poll loop (e.g. the reports route) can emit socket events too. */
@@ -38,8 +41,9 @@ export function getActiveAirports(): string[] {
 }
 
 /**
- * Fetches this one airport's live departures if the cached data is stale
- * (or missing), otherwise does nothing. Called from the routes so opening an
+ * Fetches this one airport's live departures AND arrivals (one AeroDataBox
+ * call covers both - see fetchLiveFlights) if the cached data is stale (or
+ * missing), otherwise does nothing. Called from the routes so opening an
  * airport in the app is what triggers freshness, not a fixed background
  * schedule - the only way to support many airports within the free quota.
  */
@@ -52,8 +56,9 @@ export async function ensureFreshFlights(originIata: string, emit?: EventEmitter
   // Set before awaiting so concurrent requests for the same airport don't pile up refetches.
   lastFetchedByAirport.set(origin, Date.now());
   try {
-    const flights = await fetchLiveDepartures(getOriginAirport(origin));
-    applyLiveSnapshot(origin, flights, emit ?? broadcastEmitter ?? undefined);
+    const { departures, arrivals } = await fetchLiveFlights(getOriginAirport(origin));
+    applyLiveSnapshot(origin, departures, emit ?? broadcastEmitter ?? undefined);
+    applyLiveArrivalSnapshot(origin, arrivals);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown AeroDataBox error';
     recordFetchError(message);
@@ -65,11 +70,11 @@ export function getSourceMeta() {
   return { dataSource: currentDataSource, lastError, lastFetchedAt };
 }
 
-/** Upcoming flights first (soonest departure first), already-departed flights after (most recent first). */
-function byNextDeparture(a: FlightState, b: FlightState): number {
+/** Upcoming flights first (soonest departure/arrival first), already-happened ones after (most recent first). */
+function byNextTime(aTimeIso: string, bTimeIso: string): number {
   const now = Date.now();
-  const aTime = new Date(a.estimatedDeparture).getTime();
-  const bTime = new Date(b.estimatedDeparture).getTime();
+  const aTime = new Date(aTimeIso).getTime();
+  const bTime = new Date(bTimeIso).getTime();
   const aUpcoming = aTime >= now;
   const bUpcoming = bTime >= now;
   if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
@@ -79,7 +84,7 @@ function byNextDeparture(a: FlightState, b: FlightState): number {
 export function listFlights(originIata?: string): FlightState[] {
   const all = Array.from(store.values());
   const filtered = originIata ? all.filter((f) => f.origin === originIata.toUpperCase()) : all;
-  return filtered.sort(byNextDeparture);
+  return filtered.sort((a, b) => byNextTime(a.estimatedDeparture, b.estimatedDeparture));
 }
 
 export function getFlightByNumber(flightNumber: string, originIata?: string): FlightState | undefined {
@@ -89,11 +94,27 @@ export function getFlightByNumber(flightNumber: string, originIata?: string): Fl
   return Array.from(store.values()).find((f) => f.flightNumber === upper);
 }
 
+export function listArrivals(destinationIata?: string): ArrivalFlightState[] {
+  const all = Array.from(arrivalStore.values());
+  const filtered = destinationIata ? all.filter((f) => f.destination === destinationIata.toUpperCase()) : all;
+  return filtered.sort((a, b) => byNextTime(a.estimatedArrival, b.estimatedArrival));
+}
+
+export function getArrivalByNumber(flightNumber: string, destinationIata?: string): ArrivalFlightState | undefined {
+  if (destinationIata) return arrivalStore.get(storeKey(destinationIata, flightNumber));
+  const upper = flightNumber.toUpperCase();
+  return Array.from(arrivalStore.values()).find((f) => f.flightNumber === upper);
+}
+
 export function seedDemoMode(): void {
   currentDataSource = 'demo';
   store.clear();
+  arrivalStore.clear();
   for (const flight of seedDemoFlights()) {
     store.set(storeKey(flight.origin, flight.flightNumber), flight);
+  }
+  for (const arrival of seedDemoArrivals()) {
+    arrivalStore.set(storeKey(arrival.destination, arrival.flightNumber), arrival);
   }
 }
 
@@ -103,6 +124,20 @@ export function patchDemoFlight(origin: string, flightNumber: string, patch: Par
   if (!existing) return undefined;
   const updated: FlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
   store.set(key, updated);
+  return updated;
+}
+
+/** Mirror of patchDemoFlight for the arrivals store. */
+export function patchDemoArrival(
+  destination: string,
+  flightNumber: string,
+  patch: Partial<ArrivalFlightState>,
+): ArrivalFlightState | undefined {
+  const key = storeKey(destination, flightNumber);
+  const existing = arrivalStore.get(key);
+  if (!existing) return undefined;
+  const updated: ArrivalFlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
+  arrivalStore.set(key, updated);
   return updated;
 }
 
@@ -159,6 +194,20 @@ export function applyLiveSnapshot(originIata: string, flights: FlightState[], em
   }
 }
 
+/** Mirror of applyLiveSnapshot for arrivals INTO one airport. */
+export function applyLiveArrivalSnapshot(destinationIata: string, arrivals: ArrivalFlightState[]): void {
+  const destination = destinationIata.toUpperCase();
+
+  for (const nextArrival of arrivals) {
+    arrivalStore.set(storeKey(destination, nextArrival.flightNumber), nextArrival);
+  }
+
+  const freshKeys = new Set(arrivals.map((f) => storeKey(destination, f.flightNumber)));
+  for (const key of Array.from(arrivalStore.keys())) {
+    if (key.startsWith(`${destination}:`) && !freshKeys.has(key)) arrivalStore.delete(key);
+  }
+}
+
 export function recordFetchError(message: string): void {
   lastError = message;
 }
@@ -201,5 +250,28 @@ export function reportBoardingMethod(
     broadcastEmitter(makeEvent('boarding_method_change', updated, message));
   }
 
+  return updated;
+}
+
+/**
+ * Same idea as reportBoardingMethod, but for a flight found via the arrivals
+ * list rather than the departures list - reports feed the same per-airport
+ * consensus pool either way (see methodEstimate.ts's consensusInputs), since
+ * both are ultimately reports about deplaning at the same airport.
+ */
+export function reportArrivalMethod(
+  flightNumber: string,
+  method: BoardingMethod,
+  destinationIata?: string,
+): ArrivalFlightState | undefined {
+  const arrival = getArrivalByNumber(flightNumber, destinationIata);
+  if (!arrival) return undefined;
+
+  submitReport(arrival.id, 'deplane', method, arrival.destination);
+  const nextEstimate = recomputeEstimate(arrival.id, 'deplane');
+  if (!nextEstimate) return arrival;
+
+  const updated: ArrivalFlightState = { ...arrival, disembark: nextEstimate, lastUpdated: new Date().toISOString() };
+  arrivalStore.set(storeKey(arrival.destination, arrival.flightNumber), updated);
   return updated;
 }

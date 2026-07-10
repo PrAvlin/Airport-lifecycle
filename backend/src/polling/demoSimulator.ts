@@ -1,5 +1,5 @@
-import { FlightState, FlightStatus, FlightUpdateEvent, FlightUpdateEventType } from '../types';
-import { listFlights, patchDemoFlight } from '../data/flightSource';
+import { ArrivalFlightState, FlightState, FlightStatus, FlightUpdateEvent, FlightUpdateEventType } from '../types';
+import { listArrivals, listFlights, patchDemoArrival, patchDemoFlight } from '../data/flightSource';
 import { getOriginAirport } from '../data/airports';
 import { boardingInputs, estimateAndRegister } from '../services/methodEstimate';
 
@@ -59,6 +59,31 @@ function tickFlight(flight: FlightState, emit: EventEmitter): void {
   }
 }
 
+/**
+ * Demo-only, mirror of tickFlight for the arrivals side: without this, a
+ * seeded arrival's status would sit frozen at 'scheduled' forever even as
+ * its scheduled time passes. Arrivals only ever move through
+ * scheduled -> delayed -> departed ('departed' here means "landed", not
+ * "left the origin") - the boarding/final_call/gate_closed states are
+ * departure-only concepts and never apply here.
+ */
+function tickArrival(arrival: ArrivalFlightState): void {
+  if (arrival.status === 'departed' || arrival.status === 'cancelled') return;
+  const minutesToArrival = minutesUntil(arrival.estimatedArrival);
+  const roll = Math.random();
+
+  if ((arrival.status === 'scheduled' || arrival.status === 'delayed') && roll < 0.06) {
+    const delayMinutes = 10 + Math.floor(Math.random() * 20);
+    const newArrival = new Date(new Date(arrival.estimatedArrival).getTime() + delayMinutes * 60_000).toISOString();
+    patchDemoArrival(arrival.destination, arrival.flightNumber, { status: 'delayed', estimatedArrival: newArrival });
+    return;
+  }
+
+  if (minutesToArrival <= 0) {
+    patchDemoArrival(arrival.destination, arrival.flightNumber, { status: 'departed' });
+  }
+}
+
 function deriveStatus(flight: FlightState, minutesToDeparture: number): FlightStatus {
   if (flight.status === 'cancelled' || flight.status === 'departed') return flight.status;
   const minutesToBoarding = minutesUntil(flight.boardingStartTime);
@@ -90,6 +115,9 @@ export function startDemoSimulation(emit: EventEmitter, intervalMs = 8000): Node
   return setInterval(() => {
     for (const flight of listFlights()) {
       tickFlight(flight, emit);
+    }
+    for (const arrival of listArrivals()) {
+      tickArrival(arrival);
     }
   }, intervalMs);
 }

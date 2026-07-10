@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import { config } from './config';
 import { seedDemoMode, setBroadcastEmitter } from './data/flightSource';
 import { airportsRouter } from './routes/airports';
+import { arrivalsRouter } from './routes/arrivals';
 import { flightsRouter } from './routes/flights';
 import { trafficRouter } from './routes/traffic';
 import { startDemoSimulation } from './polling/demoSimulator';
@@ -26,6 +27,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/airports', airportsRouter);
 app.use('/flights', flightsRouter);
+app.use('/arrivals', arrivalsRouter);
 app.use('/traffic', trafficRouter);
 
 const httpServer = createServer(app);

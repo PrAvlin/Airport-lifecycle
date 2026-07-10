@@ -8,6 +8,8 @@ interface Props {
   flightNumber: string;
   airport: string;
   phase: 'board' | 'deplane';
+  /** Arrivals-list flights use a separate endpoint (no 'phase' body field - it's always deplaning). */
+  source?: 'flight' | 'arrival';
 }
 
 const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
@@ -15,17 +17,22 @@ const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
   { method: 'shuttle_bus', label: 'Shuttle', icon: '🚌' },
 ];
 
-export function BoardingReportPrompt({ flightNumber, airport, phase }: Props) {
+export function BoardingReportPrompt({ flightNumber, airport, phase, source = 'flight' }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(method: BoardingMethod) {
     setSubmitting(true);
     try {
-      await fetch(`${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`, {
+      const url =
+        source === 'arrival'
+          ? `${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}/deplane-report`
+          : `${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`;
+      const body = source === 'arrival' ? { method, airport } : { phase, method, airport };
+      await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase, method, airport }),
+        body: JSON.stringify(body),
       });
       setSubmitted(true);
     } catch {

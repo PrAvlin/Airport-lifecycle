@@ -18,14 +18,14 @@ const DISEMBARK_MINUTES = 10;
  * enough signal to call "likely."
  */
 function summarizeMethodEstimate(estimate: MethodEstimate, labelFn: (m: FlightState['boarding']['method']) => string): string {
-  if (estimate.confidenceLevel === 'uncertain') {
-    return 'Not yet known whether this is an aerobridge or a shuttle bus — could be either. Come prepared for a bus just in case.';
-  }
   const base = labelFn(estimate.method);
   if (estimate.confidenceLevel === 'confirmed') {
     return `${base} (confirmed by fellow passengers)`;
   }
-  return `${base} (~${Math.round(estimate.probability * 100)}% likely — not yet confirmed)`;
+  if (estimate.confidenceLevel === 'likely') {
+    return `${base} (~${Math.round(estimate.probability * 100)}% likely — not yet confirmed)`;
+  }
+  return `${base} (best guess, only ~${Math.round(estimate.probability * 100)}% confident — not confirmed yet)`;
 }
 
 export function useJourneyStages(flight: FlightState | null): JourneyStage[] {

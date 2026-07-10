@@ -3,7 +3,7 @@ import { OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
 import { boardingInputs, disembarkInputs, estimateAndRegister, quickTurnInputs } from './methodEstimate';
 import { estimateBaggageWaitMinutes, estimateSecurityWaitMinutes } from './waitTimeEstimate';
-import { FlightState, FlightStatus } from '../types';
+import { ArrivalFlightState, FlightState, FlightStatus } from '../types';
 
 interface AeroDataBoxTime {
   utc?: string;
@@ -70,13 +70,13 @@ function normalizeFlightNumber(raw: string | undefined): string {
   return (raw ?? 'UNKNOWN').replace(/\s+/g, '').toUpperCase();
 }
 
-function deriveStatus(raw: string | undefined, estimatedDeparture: string): FlightStatus {
+function deriveStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
   const mapped = raw ? STATUS_MAP[raw] : undefined;
   if (mapped && mapped !== 'scheduled') return mapped;
 
-  const minutesToDeparture = Math.round((new Date(estimatedDeparture).getTime() - Date.now()) / 60_000);
-  if (minutesToDeparture <= 5 && minutesToDeparture > -60) return 'gate_closed';
-  if (minutesToDeparture <= 10) return 'final_call';
+  const minutesToEvent = Math.round((new Date(estimatedTime).getTime() - Date.now()) / 60_000);
+  if (minutesToEvent <= 5 && minutesToEvent > -60) return 'gate_closed';
+  if (minutesToEvent <= 10) return 'final_call';
   return mapped ?? 'scheduled';
 }
 
@@ -199,6 +199,54 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurns: Map<string, QuickTurn
 }
 
 /**
+ * Mirror of toFlightState for the other direction: a flight arriving INTO
+ * `airport`. The destination here is always one of our own registered
+ * airports, so "how you'll get off the plane" reuses the exact same
+ * gate-rule/consensus intelligence as the departure side - often with
+ * BETTER data than an outbound flight gets, since we already have this
+ * airport's own gate map.
+ */
+function toArrivalFlightState(raw: AeroDataBoxFlight, airport: OriginAirport): ArrivalFlightState | null {
+  const arrival = raw.arrival;
+  const scheduledUtc = arrival?.scheduledTime?.utc;
+  if (!arrival || !scheduledUtc || raw.isCargo) return null;
+
+  // Domestic-only: any flight arriving from outside India is out of scope.
+  const isInternational = (raw.departure?.airport?.countryCode ?? 'IN') !== 'IN';
+  if (isInternational) return null;
+
+  const flightNumber = normalizeFlightNumber(raw.number);
+  const estimatedArrival = arrival.revisedTime?.utc ?? scheduledUtc;
+  const terminal = normalizeTerminal(airport, arrival.terminal);
+  const gate = arrival.gate ?? 'TBD';
+  const originIata = raw.departure?.airport?.iata ?? 'N/A';
+  const id = `${airport.iata}_ARR_${flightNumber}_${scheduledUtc}`;
+
+  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(airport.iata, terminal, gate));
+
+  return {
+    id,
+    flightNumber,
+    airline: raw.airline?.name ?? 'Unknown Airline',
+    origin: originIata,
+    originCity: raw.departure?.airport?.municipalityName ?? raw.departure?.airport?.name ?? originIata,
+    originName: raw.departure?.airport?.name ?? 'the origin airport',
+    destination: airport.iata,
+    scheduledArrival: scheduledUtc,
+    estimatedArrival,
+    status: deriveStatus(raw.status, estimatedArrival),
+    terminal,
+    gate,
+    aircraftType: raw.aircraft?.model,
+    disembark,
+    baggageBelt: arrival.baggageBelt,
+    baggageWaitMinutes: estimateBaggageWaitMinutes(),
+    lastUpdated: new Date().toISOString(),
+    dataSource: 'live',
+  };
+}
+
+/**
  * Formats a Date as the no-offset local timestamp AeroDataBox expects (e.g.
  * 2026-07-10T08:00), using the AIRPORT's timezone rather than the server's -
  * the Codespace/host running this process is on UTC, and using its clock
@@ -222,7 +270,12 @@ function toLocalParam(date: Date, timeZone: string): string {
   return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}`;
 }
 
-export async function fetchLiveDepartures(airport: OriginAirport): Promise<FlightState[]> {
+/**
+ * Fetches both departures FROM and arrivals INTO one airport in a single
+ * AeroDataBox call (direction=Both costs no extra quota over direction=Departure
+ * alone), so adding the arrivals feature doesn't increase API usage at all.
+ */
+export async function fetchLiveFlights(airport: OriginAirport): Promise<{ departures: FlightState[]; arrivals: ArrivalFlightState[] }> {
   if (!config.aerodatabox.enabled) {
     throw new Error('AERODATABOX_API_KEY is not configured');
   }
@@ -231,9 +284,6 @@ export async function fetchLiveDepartures(airport: OriginAirport): Promise<Fligh
   const from = toLocalParam(new Date(now.getTime() - config.aerodatabox.windowHoursBack * 60 * 60_000), airport.timezone);
   const to = toLocalParam(new Date(now.getTime() + config.aerodatabox.windowHoursForward * 60 * 60_000), airport.timezone);
 
-  // direction=Both returns arrivals alongside departures in the same call (no
-  // extra quota cost), which is what lets us cross-reference aircraft
-  // rotations for the quick-turn heuristic below.
   const url =
     `https://${config.aerodatabox.host}/flights/airports/iata/${airport.iata}/${from}/${to}` +
     `?withLeg=true&direction=Both&withCancelled=true&withCodeshared=false&withCargo=false&withPrivate=false&withLocation=false`;
@@ -250,11 +300,17 @@ export async function fetchLiveDepartures(airport: OriginAirport): Promise<Fligh
   }
 
   const body = (await res.json()) as AeroDataBoxResponse;
-  const departures = body.departures ?? [];
-  const arrivals = body.arrivals ?? [];
-  const quickTurns = findQuickTurns(arrivals, departures);
+  const rawDepartures = body.departures ?? [];
+  const rawArrivals = body.arrivals ?? [];
+  const quickTurns = findQuickTurns(rawArrivals, rawDepartures);
 
-  return departures
+  const departures = rawDepartures
     .map((flight) => toFlightState(flight, quickTurns, airport))
     .filter((f): f is FlightState => f !== null);
+
+  const arrivals = rawArrivals
+    .map((flight) => toArrivalFlightState(flight, airport))
+    .filter((f): f is ArrivalFlightState => f !== null);
+
+  return { departures, arrivals };
 }

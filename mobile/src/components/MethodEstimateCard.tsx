@@ -11,6 +11,7 @@ interface Props {
   flightNumber: string;
   airport: string;
   phase: 'board' | 'deplane';
+  source?: 'flight' | 'arrival';
 }
 
 /**
@@ -20,7 +21,7 @@ interface Props {
  * and a way to help resolve it, because a wrong confident answer is worse
  * than an honest "we don't know yet."
  */
-export function MethodEstimateCard({ title, estimate, flightNumber, airport, phase }: Props) {
+export function MethodEstimateCard({ title, estimate, flightNumber, airport, phase, source = 'flight' }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -40,23 +41,26 @@ export function MethodEstimateCard({ title, estimate, flightNumber, airport, pha
           <Text style={styles.likelyNote}>
             ~{Math.round(estimate.probability * 100)}% likely, not yet confirmed — {estimate.reasoning[0]}
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} />
+          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} source={source} />
         </>
       )}
 
       {estimate.confidenceLevel === 'uncertain' && (
         <View style={styles.uncertainCard}>
-          <Text style={styles.uncertainTitle}>⚠ Not yet known — could be either</Text>
+          <BoardingMethodBadge method={estimate.method} />
+          <Text style={styles.uncertainTitle}>
+            ⚠ Best guess, only ~{Math.round(estimate.probability * 100)}% confident — not confirmed yet
+          </Text>
           {estimate.reasoning.map((reason) => (
             <Text key={reason} style={styles.reasonText}>
               • {reason}
             </Text>
           ))}
           <Text style={styles.prepTip}>
-            Come prepared for a bus: wear comfortable shoes, keep essentials within reach, and budget a few extra
-            minutes just in case.
+            Come prepared for either: wear comfortable shoes, keep essentials within reach, and budget a few extra
+            minutes just in case it's a bus.
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} />
+          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} source={source} />
         </View>
       )}
     </View>

@@ -52,11 +52,12 @@ in priority order:
 
 1. **Gate-level knowledge (strongest signal).** The physical layout gives
    it away: a ground-level gate cannot have an aerobridge, while an
-   upper-level gate almost always does. Real, curated gate maps only exist
-   for BLR and CJB so far (`backend/src/data/airports.ts`) — e.g. BLR T1
-   gates 1–2/12–18/28–43 are upper-level aerobridge gates while 3–9/19–25
-   are ground-level bus gates. When the gate is known, this replaces the
-   terminal-wide average at ~0.9–0.95 probability.
+   upper-level gate almost always does. Real, curated gate maps exist for
+   BLR and BOM so far (`backend/src/data/airports.ts`) — e.g. BLR T1 gates
+   1–2/12–18/28–43 are upper-level aerobridge gates while 3–9/19–25 are
+   ground-level bus gates. When the gate is known, this replaces the
+   terminal-wide average at ~0.9–0.95 probability, for **both** the
+   departing flight boarding there and any arriving flight deplaning there.
 2. **"Same as its own arrival" for quick turnarounds.** If a flight's own
    departure gate isn't published yet, but AeroDataBox shows the *same
    aircraft* landed at this airport and is scheduled out again within ~90
@@ -64,24 +65,35 @@ in priority order:
    stand — so it inherits whatever method that arrival gate actually used
    (aerobridge or shuttle), not a blanket assumption that fast turnarounds
    always mean aerobridge.
-3. **Terminal/airport-layout base rate** (when neither of the above
-   applies). Every supported airport has a terminal-wide estimate — for
-   MAA specifically, this is a real published fact (T1 domestic has 9
-   gates: only 3 upper-level/aerobridge, 6 ground-level/bus) rather than a
-   guess, even though the exact gate numbers aren't public.
-4. **Crowdsourced reports.** Passengers can report what they actually saw
-   (`POST /flights/:flightNumber/boarding-report`). Each report shifts the
-   estimate immediately; once 3 independent reports agree for that specific
-   flight, it locks in as `confirmed`.
+3. **Airport-level crowd consensus.** Once at least 5 passenger reports
+   have accumulated for a given airport + phase (boarding or deplaning),
+   "most of the last N reports here said shuttle" becomes a real signal in
+   its own right — even for airports with no curated gate/terminal data at
+   all — and it outranks the generic terminal-wide base rate, though a
+   matched gate rule still wins over it.
+4. **Terminal/airport-layout base rate** (when none of the above apply).
+   Every supported airport has a terminal-wide estimate — for MAA
+   specifically, this is a real published fact (T1 domestic has 9 gates:
+   only 3 upper-level/aerobridge, 6 ground-level/bus) rather than a guess,
+   even though the exact gate numbers aren't public.
+5. **Crowdsourced reports on this exact flight.** Passengers can report
+   what they actually saw (`POST /flights/:flightNumber/boarding-report`
+   or `POST /arrivals/:flightNumber/deplane-report`). Each report shifts
+   the estimate immediately; once 3 independent reports agree for that
+   specific flight, it locks in as `confirmed` — and also adds to that
+   airport's crowd-consensus pool above.
 
 These combine into one of three confidence levels, and the app's behavior
-changes with it — not just the caption:
+changes with it — not just the caption. In every case the estimate commits
+to a single method (aerobridge **or** shuttle bus, never "could be
+either") — the confidence level only changes how much weight to put on it:
 - **`confirmed`** (crowd-verified): shows a solid badge.
 - **`likely`** (probability ≥ 75%): shows a badge with the probability and
   the reasoning, plus a report prompt.
-- **`uncertain`** (a genuine toss-up): shows **no confident answer at
-  all** — just the reasoning, a practical "come prepared for a bus" tip,
-  and the report prompt front and center.
+- **`uncertain`** (a genuine toss-up, probability < 75%): still shows the
+  best-guess badge, but framed honestly as a low-confidence guess, plus
+  the reasoning, a practical "come prepared for either" tip, and the
+  report prompt front and center.
 
 **Security/baggage wait** uses a time-of-day-based typical estimate (peak
 vs. off-peak hours), also always labeled as an estimate.
@@ -127,6 +139,9 @@ Endpoints:
 - `GET /flights?airport=DEL` — today's departures for that airport (live or demo) + `meta.dataSource`; live requests trigger an on-demand fetch if the cache is stale
 - `GET /flights/:flightNumber?airport=DEL` — a single flight's current state (departure + arrival/deplaning info)
 - `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'aerobridge'|'shuttle_bus', airport?: 'DEL' }`; submits a passenger's crowdsourced report
+- `GET /arrivals?airport=DEL` — today's arrivals INTO that airport (live or demo) + `meta.dataSource`; shares the same on-demand fetch as `/flights` (one AeroDataBox call covers both directions)
+- `GET /arrivals/:flightNumber?airport=DEL` — a single inbound flight's current state and disembark-method estimate
+- `POST /arrivals/:flightNumber/deplane-report` — body `{ method: 'aerobridge'|'shuttle_bus', airport?: 'DEL' }`; submits a passenger's crowdsourced report for a flight landing at that airport
 - `GET /traffic/:airport/localities` — preset localities for that city
 - `GET /traffic/:airport/:localityId` — live (or static) drive time from that locality to the airport
 - Socket.IO: emit `subscribe`/`unsubscribe` with a flight number; listen for `flight:snapshot` and `flight:update`

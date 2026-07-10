@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { AirportSummary, FlightState, Locality, TrafficEstimate } from '../types';
+import { AirportSummary, ArrivalFlightState, BoardingMethod, FlightState, Locality, TrafficEstimate } from '../types';
 
 function resolveApiBaseUrl(): string {
   const fromExtra = Constants.expoConfig?.extra?.apiBaseUrl as string | undefined;
@@ -32,6 +32,33 @@ export async function fetchAllFlights(airport: string): Promise<FlightState[]> {
   if (!res.ok) throw new Error('Failed to load flights');
   const body = await res.json();
   return body.flights as FlightState[];
+}
+
+export async function fetchAllArrivals(airport: string): Promise<ArrivalFlightState[]> {
+  const res = await fetch(`${API_BASE_URL}/arrivals?airport=${encodeURIComponent(airport)}`);
+  if (!res.ok) throw new Error('Failed to load arrivals');
+  const body = await res.json();
+  return body.arrivals as ArrivalFlightState[];
+}
+
+export async function fetchArrival(flightNumber: string, airport: string): Promise<ArrivalFlightState> {
+  const res = await fetch(
+    `${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}?airport=${encodeURIComponent(airport)}`,
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Arrival ${flightNumber} not found`);
+  }
+  const body = await res.json();
+  return body.arrival as ArrivalFlightState;
+}
+
+export async function submitDeplaneReport(flightNumber: string, method: BoardingMethod, airport: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}/deplane-report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ method, airport }),
+  });
 }
 
 export async function fetchLocalities(airport: string): Promise<Locality[]> {

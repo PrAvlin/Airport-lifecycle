@@ -2,11 +2,13 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SearchScreen } from '../screens/SearchScreen';
 import { JourneyScreen } from '../screens/JourneyScreen';
+import { ArrivalScreen } from '../screens/ArrivalScreen';
 import { colors } from '../theme';
 
 export type RootStackParamList = {
   Search: undefined;
   Journey: { flightNumber: string; airport: string };
+  Arrival: { flightNumber: string; airport: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -24,6 +26,11 @@ export function RootNavigator() {
       <Stack.Screen
         name="Journey"
         component={JourneyScreen}
+        options={({ route }) => ({ title: route.params.flightNumber, headerShown: false })}
+      />
+      <Stack.Screen
+        name="Arrival"
+        component={ArrivalScreen}
         options={({ route }) => ({ title: route.params.flightNumber, headerShown: false })}
       />
     </Stack.Navigator>

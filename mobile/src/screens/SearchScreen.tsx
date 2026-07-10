@@ -10,8 +10,8 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { fetchAirports, fetchAllFlights } from '../api/client';
-import { AirportSummary, FlightState } from '../types';
+import { fetchAirports, fetchAllArrivals, fetchAllFlights } from '../api/client';
+import { AirportSummary, ArrivalFlightState, FlightState } from '../types';
 import { colors, statusColor } from '../theme';
 import { DataSourceBadge } from '../components/DataSourceBadge';
 import { formatIstTime } from '../utils/time';
@@ -25,11 +25,20 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// 'departed' means "already left the origin" - on the arrivals list that
+// reads as confusing, since the flight is arriving HERE, so show "Landed".
+function formatArrivalStatus(status: string): string {
+  if (status === 'departed') return 'Landed';
+  return formatStatus(status);
+}
+
 export function SearchScreen({ navigation }: Props) {
   const [airports, setAirports] = useState<AirportSummary[]>([]);
   const [selectedAirport, setSelectedAirport] = useState('BLR');
+  const [mode, setMode] = useState<'departures' | 'arrivals'>('departures');
   const [query, setQuery] = useState('');
   const [flights, setFlights] = useState<FlightState[]>([]);
+  const [arrivals, setArrivals] = useState<ArrivalFlightState[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,13 +49,23 @@ export function SearchScreen({ navigation }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    fetchAllFlights(selectedAirport)
-      .then(setFlights)
-      .catch(() => setFlights([]))
-      .finally(() => setLoading(false));
-  }, [selectedAirport]);
+    if (mode === 'departures') {
+      fetchAllFlights(selectedAirport)
+        .then(setFlights)
+        .catch(() => setFlights([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetchAllArrivals(selectedAirport)
+        .then(setArrivals)
+        .catch(() => setArrivals([]))
+        .finally(() => setLoading(false));
+    }
+  }, [selectedAirport, mode]);
 
-  const filtered = flights.filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredFlights = flights.filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()));
+  const filteredArrivals = arrivals.filter((a) =>
+    a.flightNumber.toLowerCase().includes(query.trim().toLowerCase()),
+  );
   const currentAirport = airports.find((a) => a.iata === selectedAirport);
 
   return (
@@ -54,7 +73,8 @@ export function SearchScreen({ navigation }: Props) {
       <View style={styles.hero}>
         <View style={styles.heroTop}>
           <Text style={styles.heroPlane}>✈️</Text>
-          {flights[0] && <DataSourceBadge source={flights[0].dataSource} />}
+          {mode === 'departures' && flights[0] && <DataSourceBadge source={flights[0].dataSource} />}
+          {mode === 'arrivals' && arrivals[0] && <DataSourceBadge source={arrivals[0].dataSource} />}
         </View>
         <Text style={styles.title}>Airport Lifecycle</Text>
         <Text style={styles.subtitle}>
@@ -79,27 +99,47 @@ export function SearchScreen({ navigation }: Props) {
         </ScrollView>
       </View>
 
+      <View style={styles.modeRow}>
+        <TouchableOpacity
+          style={[styles.modeTab, mode === 'departures' && styles.modeTabSelected]}
+          onPress={() => setMode('departures')}
+        >
+          <Text style={[styles.modeTabText, mode === 'departures' && styles.modeTabTextSelected]}>Departures</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeTab, mode === 'arrivals' && styles.modeTabSelected]}
+          onPress={() => setMode('arrivals')}
+        >
+          <Text style={[styles.modeTabText, mode === 'arrivals' && styles.modeTabTextSelected]}>Arrivals</Text>
+        </TouchableOpacity>
+      </View>
+
       <TextInput
         style={styles.input}
-        placeholder={`Search ${selectedAirport} departures, e.g. 6E835`}
+        placeholder={`Search ${selectedAirport} ${mode}, e.g. 6E835`}
         placeholderTextColor={colors.textSecondary}
         autoCapitalize="characters"
         value={query}
         onChangeText={setQuery}
         onSubmitEditing={() => {
-          if (query.trim()) {
+          if (!query.trim()) return;
+          if (mode === 'departures') {
             navigation.navigate('Journey', { flightNumber: query.trim(), airport: selectedAirport });
+          } else {
+            navigation.navigate('Arrival', { flightNumber: query.trim(), airport: selectedAirport });
           }
         }}
       />
 
-      <Text style={styles.sectionLabel}>Next departures (IST)</Text>
+      <Text style={styles.sectionLabel}>
+        {mode === 'departures' ? 'Next departures (IST)' : 'Next arrivals (IST)'}
+      </Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
-      ) : (
+      ) : mode === 'departures' ? (
         <FlatList
-          data={filtered}
+          data={filteredFlights}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <TouchableOpacity
@@ -120,6 +160,38 @@ export function SearchScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.cardRoute}>
                   → {item.arrival.airportCity} · {formatTime(item.estimatedDeparture)} · {item.airline}
+                </Text>
+              </View>
+              <View style={styles.cardGateBox}>
+                <Text style={styles.cardGateLabel}>{item.terminal}</Text>
+                <Text style={styles.cardGate}>{item.gate === 'TBD' ? '—' : item.gate}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      ) : (
+        <FlatList
+          data={filteredArrivals}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() =>
+                navigation.navigate('Arrival', { flightNumber: item.flightNumber, airport: selectedAirport })
+              }
+            >
+              <View style={styles.cardMedallion}>
+                <Text style={styles.cardMedallionText}>{item.flightNumber.slice(0, 2)}</Text>
+              </View>
+              <View style={styles.cardBody}>
+                <View style={styles.cardTopRow}>
+                  <Text style={styles.cardFlight}>{item.flightNumber}</Text>
+                  <Text style={[styles.cardStatus, { color: statusColor[item.status] }]}>
+                    {formatArrivalStatus(item.status)}
+                  </Text>
+                </View>
+                <Text style={styles.cardRoute}>
+                  From {item.originCity} · {formatTime(item.estimatedArrival)} · {item.airline}
                 </Text>
               </View>
               <View style={styles.cardGateBox}>
@@ -164,6 +236,19 @@ const styles = StyleSheet.create({
   airportIataSelected: { color: colors.background },
   airportCity: { color: colors.textSecondary, fontSize: 11, marginTop: 1 },
   airportCitySelected: { color: colors.background },
+  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  modeTab: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modeTabSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  modeTabText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  modeTabTextSelected: { color: colors.background },
   input: {
     backgroundColor: colors.surface,
     borderRadius: 12,

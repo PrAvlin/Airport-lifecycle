@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,15 +25,12 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type Scope = 'all' | 'domestic' | 'international';
-
 export function SearchScreen({ navigation }: Props) {
   const [airports, setAirports] = useState<AirportSummary[]>([]);
   const [selectedAirport, setSelectedAirport] = useState('BLR');
   const [query, setQuery] = useState('');
   const [flights, setFlights] = useState<FlightState[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<Scope>('all');
 
   useEffect(() => {
     fetchAirports()
@@ -48,9 +46,7 @@ export function SearchScreen({ navigation }: Props) {
       .finally(() => setLoading(false));
   }, [selectedAirport]);
 
-  const filtered = flights
-    .filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()))
-    .filter((f) => scope === 'all' || f.isInternational === (scope === 'international'));
+  const filtered = flights.filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()));
   const currentAirport = airports.find((a) => a.iata === selectedAirport);
 
   return (
@@ -65,7 +61,7 @@ export function SearchScreen({ navigation }: Props) {
           {currentAirport ? `${currentAirport.name} · ${currentAirport.city}` : 'Door-to-door journey tracking'}
         </Text>
 
-        <View style={styles.airportRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.airportRow}>
           {airports.map((a) => (
             <TouchableOpacity
               key={a.iata}
@@ -80,26 +76,7 @@ export function SearchScreen({ navigation }: Props) {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
-
-        <View style={styles.scopeRow}>
-          <TouchableOpacity
-            style={[styles.scopeChip, scope === 'domestic' && styles.scopeChipSelected]}
-            onPress={() => setScope(scope === 'domestic' ? 'all' : 'domestic')}
-          >
-            <Text style={[styles.scopeChipText, scope === 'domestic' && styles.scopeChipTextSelected]}>
-              Domestic
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.scopeChip, scope === 'international' && styles.scopeChipSelected]}
-            onPress={() => setScope(scope === 'international' ? 'all' : 'international')}
-          >
-            <Text style={[styles.scopeChipText, scope === 'international' && styles.scopeChipTextSelected]}>
-              International
-            </Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
 
       <TextInput
@@ -116,9 +93,7 @@ export function SearchScreen({ navigation }: Props) {
         }}
       />
 
-      <Text style={styles.sectionLabel}>
-        Next {scope === 'all' ? '' : `${scope} `}departures (IST)
-      </Text>
+      <Text style={styles.sectionLabel}>Next departures (IST)</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
@@ -173,34 +148,22 @@ const styles = StyleSheet.create({
   heroPlane: { fontSize: 24 },
   title: { color: colors.textPrimary, fontSize: 24, fontWeight: '800', letterSpacing: -0.3 },
   subtitle: { color: colors.textSecondary, fontSize: 13, marginTop: 3 },
-  airportRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  airportRow: { flexDirection: 'row', gap: 8, marginTop: 14, paddingRight: 4 },
   airportChip: {
-    flex: 1,
     backgroundColor: colors.surfaceAlt,
     borderRadius: 12,
     paddingVertical: 10,
+    paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
+    minWidth: 68,
   },
   airportChipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
   airportIata: { color: colors.textPrimary, fontSize: 16, fontWeight: '800' },
   airportIataSelected: { color: colors.background },
   airportCity: { color: colors.textSecondary, fontSize: 11, marginTop: 1 },
   airportCitySelected: { color: colors.background },
-  scopeRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  scopeChip: {
-    flex: 1,
-    backgroundColor: colors.background,
-    borderRadius: 12,
-    paddingVertical: 9,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  scopeChipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
-  scopeChipText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
-  scopeChipTextSelected: { color: colors.background },
   input: {
     backgroundColor: colors.surface,
     borderRadius: 12,

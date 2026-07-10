@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getFlightByNumber, getSourceMeta, listFlights, reportBoardingMethod } from '../data/flightSource';
+import { ensureFreshFlights, getFlightByNumber, getSourceMeta, listFlights, reportBoardingMethod } from '../data/flightSource';
 import { isKnownOrigin } from '../data/airports';
 import { BoardingMethod } from '../types';
 
@@ -12,13 +12,15 @@ function airportParam(raw: unknown): string | undefined {
   return isKnownOrigin(raw) ? raw.toUpperCase() : undefined;
 }
 
-flightsRouter.get('/', (req, res) => {
+flightsRouter.get('/', async (req, res) => {
   const airport = airportParam(req.query.airport);
+  if (airport) await ensureFreshFlights(airport);
   res.json({ flights: listFlights(airport), meta: getSourceMeta() });
 });
 
-flightsRouter.get('/:flightNumber', (req, res) => {
+flightsRouter.get('/:flightNumber', async (req, res) => {
   const airport = airportParam(req.query.airport);
+  if (airport) await ensureFreshFlights(airport);
   const flight = getFlightByNumber(req.params.flightNumber, airport);
   if (!flight) {
     res.status(404).json({ error: `Flight ${req.params.flightNumber} not found among today's departures` });

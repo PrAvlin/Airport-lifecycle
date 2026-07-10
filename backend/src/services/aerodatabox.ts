@@ -1,13 +1,8 @@
 import { config } from '../config';
 import { OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
-import { boardingInputs, disembarkInputs, estimateAndRegister } from './methodEstimate';
-import {
-  estimateArrivalImmigrationWaitMinutes,
-  estimateBaggageWaitMinutes,
-  estimateImmigrationWaitMinutes,
-  estimateSecurityWaitMinutes,
-} from './waitTimeEstimate';
+import { boardingInputs, disembarkInputs, estimateAndRegister, quickTurnInputs } from './methodEstimate';
+import { estimateBaggageWaitMinutes, estimateSecurityWaitMinutes } from './waitTimeEstimate';
 import { FlightState, FlightStatus } from '../types';
 
 interface AeroDataBoxTime {
@@ -57,8 +52,10 @@ const STATUS_MAP: Record<string, FlightStatus> = {
   CanceledDataSourceOutage: 'cancelled',
 };
 
-// A same-airframe arrival-to-departure gap this tight means BLR ground ops
-// almost certainly parked it on a contact/aerobridge stand to make the turn.
+const BOARDING_LEAD_MINUTES = 30;
+
+// A same-airframe arrival-to-departure gap this tight means the aircraft
+// almost certainly stayed on (or very near) the same stand to make the turn.
 const QUICK_TURN_MAX_MINUTES = 90;
 
 function normalizeTerminal(airport: OriginAirport, raw: string | undefined): string {
@@ -83,56 +80,64 @@ function deriveStatus(raw: string | undefined, estimatedDeparture: string): Flig
   return mapped ?? 'scheduled';
 }
 
+interface QuickTurnInfo {
+  arrivalGate?: string;
+  arrivalTerminal?: string;
+}
+
 /**
- * Cross-references aircraft registrations between BLR arrivals and
- * departures in the fetched window to find quick turnarounds - a real
- * operational signal (not a guess) that a stand is bridge-served, since fast
- * turns are steered to contact gates whenever possible.
+ * Cross-references aircraft registrations between arrivals and departures in
+ * the fetched window to find quick turnarounds, and remembers exactly which
+ * gate that aircraft arrived at - a real operational signal (not a guess)
+ * for what to expect at departure, since a fast turn almost always reuses
+ * the same stand rather than automatically implying an aerobridge.
  */
-function findQuickTurnRegistrations(arrivals: AeroDataBoxFlight[], departures: AeroDataBoxFlight[]): Set<string> {
-  const arrivalTimesByReg = new Map<string, Date[]>();
+function findQuickTurns(arrivals: AeroDataBoxFlight[], departures: AeroDataBoxFlight[]): Map<string, QuickTurnInfo> {
+  const arrivalsByReg = new Map<string, { time: Date; gate?: string; terminal?: string }[]>();
   for (const flight of arrivals) {
     const reg = flight.aircraft?.reg;
     const landedUtc = flight.arrival?.revisedTime?.utc ?? flight.arrival?.scheduledTime?.utc;
     if (!reg || !landedUtc) continue;
-    const list = arrivalTimesByReg.get(reg) ?? [];
-    list.push(new Date(landedUtc));
-    arrivalTimesByReg.set(reg, list);
+    const list = arrivalsByReg.get(reg) ?? [];
+    list.push({ time: new Date(landedUtc), gate: flight.arrival?.gate, terminal: flight.arrival?.terminal });
+    arrivalsByReg.set(reg, list);
   }
 
-  const quickTurnRegs = new Set<string>();
+  const quickTurns = new Map<string, QuickTurnInfo>();
   for (const flight of departures) {
     const reg = flight.aircraft?.reg;
     const depUtc = flight.departure?.revisedTime?.utc ?? flight.departure?.scheduledTime?.utc;
-    const landedTimes = reg && arrivalTimesByReg.get(reg);
-    if (!reg || !depUtc || !landedTimes) continue;
+    const landings = reg && arrivalsByReg.get(reg);
+    if (!reg || !depUtc || !landings) continue;
 
     const departureTime = new Date(depUtc).getTime();
-    const isQuickTurn = landedTimes.some((landed) => {
-      const turnMinutes = (departureTime - landed.getTime()) / 60_000;
+    const match = landings.find((landed) => {
+      const turnMinutes = (departureTime - landed.time.getTime()) / 60_000;
       return turnMinutes >= 0 && turnMinutes <= QUICK_TURN_MAX_MINUTES;
     });
-    if (isQuickTurn) quickTurnRegs.add(reg);
+    if (match) quickTurns.set(reg, { arrivalGate: match.gate, arrivalTerminal: match.terminal });
   }
 
-  return quickTurnRegs;
+  return quickTurns;
 }
 
-function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airport: OriginAirport): FlightState | null {
+function toFlightState(raw: AeroDataBoxFlight, quickTurns: Map<string, QuickTurnInfo>, airport: OriginAirport): FlightState | null {
   const departure = raw.departure;
   const scheduledUtc = departure?.scheduledTime?.utc;
   if (!departure || !scheduledUtc || raw.isCargo) return null;
+
+  // Domestic-only: any route leaving India is out of scope for this app.
+  const isInternational = (raw.arrival?.airport?.countryCode ?? 'IN') !== 'IN';
+  if (isInternational) return null;
 
   const flightNumber = normalizeFlightNumber(raw.number);
   const estimatedDeparture = departure.revisedTime?.utc ?? scheduledUtc;
   const terminal = normalizeTerminal(airport, departure.terminal);
   const gate = departure.gate ?? 'TBD';
   const destinationIata = raw.arrival?.airport?.iata ?? 'N/A';
-  const isInternational = (raw.arrival?.airport?.countryCode ?? 'IN') !== 'IN';
-  const boardingLeadMinutes = isInternational ? 45 : 30;
-  const boardingStartTime = new Date(new Date(estimatedDeparture).getTime() - boardingLeadMinutes * 60_000).toISOString();
+  const boardingStartTime = new Date(new Date(estimatedDeparture).getTime() - BOARDING_LEAD_MINUTES * 60_000).toISOString();
   const now = new Date();
-  const isQuickTurn = !!raw.aircraft?.reg && quickTurnRegs.has(raw.aircraft.reg);
+  const quickTurn = raw.aircraft?.reg ? quickTurns.get(raw.aircraft.reg) : undefined;
   const id = `${airport.iata}_${flightNumber}_${scheduledUtc}`;
 
   const destinationProfile = getDestinationProfile(destinationIata);
@@ -141,14 +146,17 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
   const arrivalScheduledUtc = raw.arrival?.scheduledTime?.utc ?? estimatedDeparture;
   const arrivalEstimatedUtc = raw.arrival?.revisedTime?.utc ?? arrivalScheduledUtc;
 
-  const boarding = estimateAndRegister(id, 'board', boardingInputs(airport, terminal, gate), isQuickTurn);
+  // The departure gate is always the best evidence when it's known. Only
+  // when it's still TBD do we fall back to "this aircraft just arrived at
+  // gate X, so it'll likely depart the same way" for a quick turnaround.
+  const boardingEstimateInputs =
+    gate === 'TBD' && quickTurn?.arrivalGate
+      ? quickTurnInputs(airport, quickTurn.arrivalTerminal ?? 'TBD', quickTurn.arrivalGate) ?? boardingInputs(airport, terminal, gate)
+      : boardingInputs(airport, terminal, gate);
 
-  const disembark = estimateAndRegister(
-    id,
-    'deplane',
-    disembarkInputs(destinationIata, arrivalTerminal, arrivalGate),
-    isQuickTurn,
-  );
+  const boarding = estimateAndRegister(id, 'board', boardingEstimateInputs);
+
+  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(destinationIata, arrivalTerminal, arrivalGate));
 
   return {
     id,
@@ -156,7 +164,6 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
     airline: raw.airline?.name ?? 'Unknown Airline',
     origin: airport.iata,
     destination: destinationIata,
-    isInternational,
     scheduledDeparture: scheduledUtc,
     estimatedDeparture,
     status: deriveStatus(raw.status, estimatedDeparture),
@@ -168,9 +175,6 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
     boardingStartConfidence: 'estimated',
     checkpoints: {
       security: { name: `${terminal} Security Checkpoint`, estimatedWaitMinutes: estimateSecurityWaitMinutes(now) },
-      ...(isInternational
-        ? { immigration: { name: `${terminal} Immigration (Departures)`, estimatedWaitMinutes: estimateImmigrationWaitMinutes(now) } }
-        : {}),
     },
     lastUpdated: new Date().toISOString(),
     dataSource: 'live',
@@ -185,10 +189,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
       estimatedArrival: arrivalEstimatedUtc,
       disembark,
       baggageBelt: raw.arrival?.baggageBelt,
-      immigrationWaitMinutes: isInternational
-        ? estimateArrivalImmigrationWaitMinutes(new Date(arrivalEstimatedUtc), destinationProfile.timezone)
-        : undefined,
-      baggageWaitMinutes: estimateBaggageWaitMinutes(isInternational),
+      baggageWaitMinutes: estimateBaggageWaitMinutes(),
     },
   };
 }
@@ -247,9 +248,9 @@ export async function fetchLiveDepartures(airport: OriginAirport): Promise<Fligh
   const body = (await res.json()) as AeroDataBoxResponse;
   const departures = body.departures ?? [];
   const arrivals = body.arrivals ?? [];
-  const quickTurnRegs = findQuickTurnRegistrations(arrivals, departures);
+  const quickTurns = findQuickTurns(arrivals, departures);
 
   return departures
-    .map((flight) => toFlightState(flight, quickTurnRegs, airport))
+    .map((flight) => toFlightState(flight, quickTurns, airport))
     .filter((f): f is FlightState => f !== null);
 }

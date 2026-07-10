@@ -5,8 +5,6 @@ import { BoardingMethod, MethodConfidenceLevel, MethodEstimate } from '../types'
 
 const LOCK_THRESHOLD = 3;
 const LIKELY_THRESHOLD = 0.75;
-// The aircraft-rotation signal floors the aerobridge probability at this value.
-const QUICK_TURN_AEROBRIDGE_PROB = 0.85;
 
 function methodLabel(method: BoardingMethod): string {
   switch (method) {
@@ -18,18 +16,9 @@ function methodLabel(method: BoardingMethod): string {
 }
 
 interface EstimateInputs {
-  /** Prior probability that boarding/deplaning is via aerobridge, before quick-turn and crowd signals. */
+  /** Prior probability that boarding/deplaning is via aerobridge, before the crowd-report signal. */
   baseAerobridgeProb: number;
   baseReasons: string[];
-  /**
-   * True when baseAerobridgeProb came from a matched physical-layout gate
-   * rule (a hard fact - a ground-level gate cannot have an aerobridge,
-   * no matter what) rather than a statistical terminal-wide average. The
-   * quick-turn heuristic below must never override a hard physical fact
-   * with a mere statistical inference.
-   */
-  isGateConfirmed: boolean;
-  isQuickTurn: boolean;
 }
 
 /**
@@ -39,31 +28,52 @@ interface EstimateInputs {
  * upper-level gate almost always does — so a matched gate rule replaces the
  * terminal-wide base rate instead of averaging with it.
  */
-export function boardingInputs(airport: OriginAirport, terminal: string, gate: string): Omit<EstimateInputs, 'isQuickTurn'> {
+export function boardingInputs(airport: OriginAirport, terminal: string, gate: string): EstimateInputs {
   const gateRule = gate !== 'TBD' ? findGateRule(airport, terminal, gate) : undefined;
   if (gateRule) {
     const isBridge = gateRule.method === 'aerobridge';
     return {
       baseAerobridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
       baseReasons: [`Gate ${gate} ${gateRule.note}.`],
-      isGateConfirmed: true,
     };
   }
   const profile = getTerminalProfile(airport, terminal);
-  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason], isGateConfirmed: false };
+  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason] };
+}
+
+/**
+ * When a flight's own departure gate isn't published yet but the SAME
+ * aircraft is doing a quick turnaround (it just landed and is due out again
+ * within ~90 minutes), it almost always reuses the same physical stand -
+ * so the real signal is "however it arrived is how it'll depart," not a
+ * blanket assumption that fast turnarounds mean aerobridge. Returns
+ * undefined if we don't have gate-rule data for the arrival gate either, so
+ * the caller can fall back to the plain terminal-wide base rate.
+ */
+export function quickTurnInputs(airport: OriginAirport, arrivalTerminal: string, arrivalGate: string): EstimateInputs | undefined {
+  const terminal = arrivalTerminal !== 'TBD' ? arrivalTerminal : airport.defaultTerminal;
+  const gateRule = arrivalGate !== 'TBD' ? findGateRule(airport, terminal, arrivalGate) : undefined;
+  if (!gateRule) return undefined;
+  const isBridge = gateRule.method === 'aerobridge';
+  return {
+    baseAerobridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
+    baseReasons: [
+      `This aircraft just arrived at Gate ${arrivalGate} (${gateRule.note}) and is due out again within 90 minutes — quick turnarounds normally reuse the same stand.`,
+    ],
+  };
 }
 
 /**
  * Builds the deplaning-side inputs. If the destination happens to be one of
- * our own origin airports (BLR/MAA/CJB) and its arrival gate is already
- * known, the same gate-level physical-layout knowledge used for boarding
- * applies here too and dominates over the airport-wide profile.
+ * our own origin airports and its arrival gate is already known, the same
+ * gate-level physical-layout knowledge used for boarding applies here too
+ * and dominates over the airport-wide profile.
  */
 export function disembarkInputs(
   destinationIata: string,
   arrivalTerminal?: string,
   arrivalGate?: string,
-): Omit<EstimateInputs, 'isQuickTurn'> {
+): EstimateInputs {
   if (arrivalGate && arrivalGate !== 'TBD' && isKnownOrigin(destinationIata)) {
     const airport = getOriginAirport(destinationIata);
     const terminal = arrivalTerminal && arrivalTerminal !== 'TBD' ? arrivalTerminal : airport.defaultTerminal;
@@ -73,7 +83,6 @@ export function disembarkInputs(
       return {
         baseAerobridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
         baseReasons: [`Arrival gate ${arrivalGate} ${gateRule.note}.`],
-        isGateConfirmed: true,
       };
     }
   }
@@ -85,14 +94,14 @@ export function disembarkInputs(
       : profile.aerobridgeShare <= 0.5
         ? `${profile.name} regularly uses remote stands reached by shuttle bus.`
         : `${profile.name} uses a mix of aerobridge and remote stands.`;
-  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [reason], isGateConfirmed: false };
+  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [reason] };
 }
 
 /**
  * Registered whenever a flight is created/refreshed from the flight source
  * (live poll or demo generator), so that a crowd report arriving between
- * polls can recompute the estimate immediately without losing the gate,
- * quick-turn, or base airport context that produced it.
+ * polls can recompute the estimate immediately without losing the gate or
+ * base airport context that produced it.
  */
 const contexts = new Map<string, EstimateInputs>();
 
@@ -121,16 +130,6 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: EstimateI
   let aerobridgeProb = ctx.baseAerobridgeProb;
   const reasoning = [...ctx.baseReasons];
 
-  // A matched gate rule is a hard physical fact (a ground-level gate cannot
-  // have an aerobridge) - the quick-turn heuristic only applies when we're
-  // relying on a statistical terminal-wide average instead of that fact.
-  if (ctx.isQuickTurn && !ctx.isGateConfirmed) {
-    if (aerobridgeProb < QUICK_TURN_AEROBRIDGE_PROB) {
-      aerobridgeProb = QUICK_TURN_AEROBRIDGE_PROB;
-    }
-    reasoning.push('This aircraft is due out again within the hour — fast turnarounds are usually parked at bridge-served stands.');
-  }
-
   const totalReports = Object.values(reportCounts).reduce((sum: number, c) => sum + (c ?? 0), 0);
   if (totalReports > 0) {
     const aerobridgeReports = reportCounts.aerobridge ?? 0;
@@ -157,15 +156,9 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: EstimateI
 }
 
 /** Computes the estimate for a newly-built flight and remembers the context so later reports can recompute it. */
-export function estimateAndRegister(
-  flightId: string,
-  phase: ReportPhase,
-  inputs: Omit<EstimateInputs, 'isQuickTurn'>,
-  isQuickTurn: boolean,
-): MethodEstimate {
-  const ctx: EstimateInputs = { ...inputs, isQuickTurn };
-  contexts.set(contextKey(flightId, phase), ctx);
-  return computeFromContext(flightId, phase, ctx);
+export function estimateAndRegister(flightId: string, phase: ReportPhase, inputs: EstimateInputs): MethodEstimate {
+  contexts.set(contextKey(flightId, phase), inputs);
+  return computeFromContext(flightId, phase, inputs);
 }
 
 /** Recomputes using the last-registered context, e.g. right after a new crowd report comes in. */

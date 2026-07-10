@@ -38,7 +38,6 @@ export interface ArrivalInfo {
   estimatedArrival: string;
   disembark: MethodEstimate;
   baggageBelt?: string;
-  immigrationWaitMinutes?: number;
   baggageWaitMinutes: number;
 }
 
@@ -48,7 +47,6 @@ export interface FlightState {
   airline: string;
   origin: string;
   destination: string;
-  isInternational: boolean;
   scheduledDeparture: string;
   estimatedDeparture: string;
   status: FlightStatus;
@@ -60,7 +58,6 @@ export interface FlightState {
   boardingStartConfidence: 'estimated' | 'confirmed';
   checkpoints: {
     security: CheckpointEstimate;
-    immigration?: CheckpointEstimate;
   };
   lastUpdated: string;
   dataSource: DataSource;
@@ -86,13 +83,11 @@ export type JourneyStageId =
   | 'entry'
   | 'check_in'
   | 'security'
-  | 'immigration'
   | 'gate_area'
   | 'boarding'
   | 'departed'
   | 'arrival'
   | 'deplaning'
-  | 'arrival_immigration'
   | 'baggage_claim'
   | 'exit';
 

@@ -61,16 +61,6 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       },
     ];
 
-    if (flight.checkpoints.immigration) {
-      stages.push({
-        id: 'immigration',
-        label: 'Immigration',
-        detail: `${flight.checkpoints.immigration.name} · ~${flight.checkpoints.immigration.estimatedWaitMinutes} min typical wait`,
-        isDone: minutesToBoarding < 15,
-        isActive: minutesToBoarding >= 15 && minutesToBoarding < 20,
-      });
-    }
-
     stages.push(
       {
         id: 'gate_area',
@@ -99,9 +89,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
     const minutesToTouchdown = minutesUntil(flight.arrival.estimatedArrival);
     const minutesToGate = minutesToTouchdown + TAXI_TO_STAND_MINUTES;
     const minutesToDeplaningDone = minutesToGate + DISEMBARK_MINUTES;
-    const immigrationWaitMinutes = flight.isInternational ? flight.arrival.immigrationWaitMinutes ?? 0 : 0;
-    const minutesToImmigrationDone = minutesToDeplaningDone + immigrationWaitMinutes;
-    const minutesToBaggageDone = minutesToImmigrationDone + flight.arrival.baggageWaitMinutes;
+    const minutesToBaggageDone = minutesToDeplaningDone + flight.arrival.baggageWaitMinutes;
 
     stages.push(
       {
@@ -122,16 +110,6 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       },
     );
 
-    if (flight.isInternational) {
-      stages.push({
-        id: 'arrival_immigration',
-        label: 'Immigration & Customs',
-        detail: `~${immigrationWaitMinutes} min typical wait`,
-        isDone: minutesToImmigrationDone <= 0,
-        isActive: minutesToDeplaningDone <= 0 && minutesToImmigrationDone > 0,
-      });
-    }
-
     stages.push(
       {
         id: 'baggage_claim',
@@ -140,7 +118,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
           ? `Belt ${flight.arrival.baggageBelt} · ~${flight.arrival.baggageWaitMinutes} min typical wait`
           : `Belt not yet published · ~${flight.arrival.baggageWaitMinutes} min typical wait`,
         isDone: minutesToBaggageDone <= 0,
-        isActive: minutesToImmigrationDone <= 0 && minutesToBaggageDone > 0,
+        isActive: minutesToDeplaningDone <= 0 && minutesToBaggageDone > 0,
       },
       {
         id: 'exit',

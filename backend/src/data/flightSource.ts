@@ -1,6 +1,8 @@
 import { config } from '../config';
 import { DataSource, FlightState, FlightUpdateEvent, FlightUpdateEventType } from '../types';
 import { seedDemoFlights } from './flights';
+import { isKnownOrigin, getOriginAirport } from './airports';
+import { fetchLiveDepartures } from '../services/aerodatabox';
 import { ReportPhase, submitReport } from '../services/boardingReports';
 import { recomputeEstimate } from '../services/methodEstimate';
 
@@ -14,6 +16,13 @@ let lastError: string | null = null;
 let lastFetchedAt: string | null = null;
 let broadcastEmitter: EventEmitter | null = null;
 
+// AeroDataBox's free tier is ~100 requests/month total, which can't support
+// polling a large list of airports on a timer - so instead of fetching every
+// supported airport whether anyone's looking or not, each airport is only
+// fetched when someone actually opens it (below), cached for this long.
+const FETCH_CACHE_TTL_MS = 10 * 60_000;
+const lastFetchedByAirport = new Map<string, number>();
+
 function storeKey(origin: string, flightNumber: string): string {
   return `${origin.toUpperCase()}:${flightNumber.toUpperCase()}`;
 }
@@ -21,6 +30,35 @@ function storeKey(origin: string, flightNumber: string): string {
 /** Set once at server startup so parts of the app outside the poll loop (e.g. the reports route) can emit socket events too. */
 export function setBroadcastEmitter(emit: EventEmitter): void {
   broadcastEmitter = emit;
+}
+
+/** Airports that have been fetched at least once recently - used by the background refresher so it only ever touches airports someone's actually viewing. */
+export function getActiveAirports(): string[] {
+  return Array.from(lastFetchedByAirport.keys());
+}
+
+/**
+ * Fetches this one airport's live departures if the cached data is stale
+ * (or missing), otherwise does nothing. Called from the routes so opening an
+ * airport in the app is what triggers freshness, not a fixed background
+ * schedule - the only way to support many airports within the free quota.
+ */
+export async function ensureFreshFlights(originIata: string, emit?: EventEmitter): Promise<void> {
+  if (!config.aerodatabox.enabled || !isKnownOrigin(originIata)) return;
+  const origin = originIata.toUpperCase();
+  const lastFetch = lastFetchedByAirport.get(origin) ?? 0;
+  if (Date.now() - lastFetch < FETCH_CACHE_TTL_MS) return;
+
+  // Set before awaiting so concurrent requests for the same airport don't pile up refetches.
+  lastFetchedByAirport.set(origin, Date.now());
+  try {
+    const flights = await fetchLiveDepartures(getOriginAirport(origin));
+    applyLiveSnapshot(origin, flights, emit ?? broadcastEmitter ?? undefined);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown AeroDataBox error';
+    recordFetchError(message);
+    console.error(`[flights] ${origin} fetch failed: ${message}`);
+  }
 }
 
 export function getSourceMeta() {

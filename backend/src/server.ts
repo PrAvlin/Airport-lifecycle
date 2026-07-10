@@ -42,10 +42,10 @@ const emit = (event: Parameters<typeof broadcastFlightUpdate>[1]) => {
 setBroadcastEmitter(emit);
 
 if (config.aerodatabox.enabled) {
-  console.log('AERODATABOX_API_KEY found — polling live BLR/MAA/CJB departures.');
+  console.log('AERODATABOX_API_KEY found — airports fetch on demand as they are opened (see /airports for the full list).');
   startLivePolling(emit);
 } else {
-  console.log('AERODATABOX_API_KEY not set — running in DEMO mode with simulated BLR/MAA/CJB flights.');
+  console.log('AERODATABOX_API_KEY not set — running in DEMO mode with simulated flights.');
   seedDemoMode();
   startDemoSimulation(emit);
 }
@@ -55,5 +55,5 @@ if (!config.tomtom.enabled) {
 }
 
 httpServer.listen(config.port, () => {
-  console.log(`Airport lifecycle backend (BLR·MAA·CJB) listening on http://localhost:${config.port}`);
+  console.log(`Airport lifecycle backend listening on http://localhost:${config.port}`);
 });

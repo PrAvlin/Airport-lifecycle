@@ -1,18 +1,11 @@
 import { getOriginAirport, isKnownOrigin, ORIGIN_AIRPORTS, OriginAirport } from './airports';
 import { getDestinationProfile } from './destinationAirports';
 import { boardingInputs, disembarkInputs, estimateAndRegister } from '../services/methodEstimate';
-import {
-  estimateArrivalImmigrationWaitMinutes,
-  estimateBaggageWaitMinutes,
-  estimateImmigrationWaitMinutes,
-  estimateSecurityWaitMinutes,
-} from '../services/waitTimeEstimate';
+import { estimateBaggageWaitMinutes, estimateSecurityWaitMinutes } from '../services/waitTimeEstimate';
 import { FlightState } from '../types';
 
 const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
-const ARRIVAL_TERMINALS = ['1', '2', '3'];
-const DESTINATIONS = ['BOM', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD', 'DEL', 'PNQ', 'BLR', 'CJB'];
-const INTERNATIONAL_DESTINATIONS = new Set(['DXB', 'SIN', 'LHR']);
+const BOARDING_LEAD_MINUTES = 30;
 const SHORT_HAUL_AIRCRAFT = ['Airbus A320', 'Airbus A320neo', 'Airbus A321neo', 'Boeing 737-800', 'ATR 72-600'];
 const LONG_HAUL_AIRCRAFT = ['Boeing 777-300ER', 'Airbus A350-900', 'Boeing 787-9 Dreamliner'];
 
@@ -51,25 +44,24 @@ function pickGate(airport: OriginAirport, terminal: string): string {
  * the app is still explorable before wiring up the real live data source.
  * Every flight is tagged dataSource: 'demo' and the API surfaces that tag so
  * the UI can show a clear "demo data" indicator rather than pretending it's live.
+ * Domestic-only, same as the live path.
  */
 export function createMockFlight(airport: OriginAirport, overrides: Partial<FlightState> = {}): FlightState {
   const airline = pick(AIRLINES);
-  let destination = pick(DESTINATIONS.filter((d) => d !== airport.iata));
-  const isInternational = INTERNATIONAL_DESTINATIONS.has(destination);
+  const destination = pick(Object.keys(ORIGIN_AIRPORTS).filter((d) => d !== airport.iata));
   const departureInMinutes = 45 + Math.floor(Math.random() * 120);
   const terminal = pick(Object.keys(airport.terminals));
   const gate = pickGate(airport, terminal);
   const flightNumber = randomFlightNumber(airline);
   const estimatedDeparture = minutesFromNow(departureInMinutes);
-  const boardingLeadMinutes = isInternational ? 45 : 30;
   const now = new Date();
 
   const destinationProfile = getDestinationProfile(destination);
-  // When the destination happens to be one of our own origin airports
-  // (BLR/MAA/CJB), reuse its real terminal/gate map so demo mode also
-  // exercises gate-level deplaning intelligence instead of always TBD.
+  // Every domestic destination is also one of our own registered airports,
+  // so demo mode always has a real terminal/gate map to exercise gate-level
+  // deplaning intelligence instead of always TBD.
   const destAirport = isKnownOrigin(destination) ? getOriginAirport(destination) : undefined;
-  const arrivalTerminal = destAirport ? pick(Object.keys(destAirport.terminals)) : pick(ARRIVAL_TERMINALS);
+  const arrivalTerminal = destAirport ? pick(Object.keys(destAirport.terminals)) : 'TBD';
   const arrivalGate = destAirport ? pickGate(destAirport, arrivalTerminal) : 'TBD';
   const scheduledArrival = new Date(
     new Date(estimatedDeparture).getTime() + destinationProfile.typicalFlightMinutes * 60_000,
@@ -77,10 +69,10 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
 
   const id = `${airport.iata}_${flightNumber}_${estimatedDeparture}`;
 
-  // Demo mode has no real aircraft-rotation data to reason from, so isQuickTurn is always false here.
-  const boarding = estimateAndRegister(id, 'board', boardingInputs(airport, terminal, gate), false);
+  // Demo mode has no real aircraft-rotation data to reason from, so quick-turn inference never applies here.
+  const boarding = estimateAndRegister(id, 'board', boardingInputs(airport, terminal, gate));
 
-  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(destination, arrivalTerminal, arrivalGate), false);
+  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(destination, arrivalTerminal, arrivalGate));
 
   const flight: FlightState = {
     id,
@@ -88,21 +80,17 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
     airline,
     origin: airport.iata,
     destination,
-    isInternational,
     scheduledDeparture: estimatedDeparture,
     estimatedDeparture,
     status: 'scheduled',
     terminal,
     gate,
-    aircraftType: pick(destinationProfile.typicalFlightMinutes >= 180 ? LONG_HAUL_AIRCRAFT : SHORT_HAUL_AIRCRAFT),
+    aircraftType: pick(destinationProfile.typicalFlightMinutes >= 150 ? LONG_HAUL_AIRCRAFT : SHORT_HAUL_AIRCRAFT),
     boarding,
-    boardingStartTime: minutesFromNow(departureInMinutes - boardingLeadMinutes),
+    boardingStartTime: minutesFromNow(departureInMinutes - BOARDING_LEAD_MINUTES),
     boardingStartConfidence: 'estimated',
     checkpoints: {
       security: { name: `${terminal} Security Checkpoint`, estimatedWaitMinutes: estimateSecurityWaitMinutes(now) },
-      ...(isInternational
-        ? { immigration: { name: `${terminal} Immigration (Departures)`, estimatedWaitMinutes: estimateImmigrationWaitMinutes(now) } }
-        : {}),
     },
     lastUpdated: new Date().toISOString(),
     dataSource: 'demo',
@@ -117,10 +105,7 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
       estimatedArrival: scheduledArrival,
       disembark,
       baggageBelt: undefined,
-      immigrationWaitMinutes: isInternational
-        ? estimateArrivalImmigrationWaitMinutes(new Date(scheduledArrival), destinationProfile.timezone)
-        : undefined,
-      baggageWaitMinutes: estimateBaggageWaitMinutes(isInternational),
+      baggageWaitMinutes: estimateBaggageWaitMinutes(),
     },
   };
 
@@ -132,7 +117,7 @@ const DEMO_COUNTS: Record<string, number> = { BLR: 8, MAA: 7, CJB: 5 };
 export function seedDemoFlights(): FlightState[] {
   const flights: FlightState[] = [];
   for (const airport of Object.values(ORIGIN_AIRPORTS)) {
-    const count = DEMO_COUNTS[airport.iata] ?? 6;
+    const count = DEMO_COUNTS[airport.iata] ?? 4;
     for (let i = 0; i < count; i++) {
       flights.push(createMockFlight(airport));
     }

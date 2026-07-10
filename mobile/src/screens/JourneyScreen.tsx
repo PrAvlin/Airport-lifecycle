@@ -9,13 +9,12 @@ import { DataSourceBadge } from '../components/DataSourceBadge';
 import { MethodEstimateCard } from '../components/MethodEstimateCard';
 import { TrafficCard } from '../components/TrafficCard';
 import { colors, statusColor } from '../theme';
+import { formatIstTime } from '../utils/time';
 import type { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Journey'>;
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+const formatTime = formatIstTime;
 
 function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

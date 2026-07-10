@@ -13,13 +13,12 @@ import { fetchAirports, fetchAllFlights } from '../api/client';
 import { AirportSummary, FlightState } from '../types';
 import { colors, statusColor } from '../theme';
 import { DataSourceBadge } from '../components/DataSourceBadge';
+import { formatIstTime } from '../utils/time';
 import type { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Search'>;
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+const formatTime = formatIstTime;
 
 function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -95,7 +94,7 @@ export function SearchScreen({ navigation }: Props) {
         }}
       />
 
-      <Text style={styles.sectionLabel}>Today's departures</Text>
+      <Text style={styles.sectionLabel}>Next departures (IST)</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />

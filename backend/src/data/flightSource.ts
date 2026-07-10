@@ -27,11 +27,21 @@ export function getSourceMeta() {
   return { dataSource: currentDataSource, lastError, lastFetchedAt };
 }
 
+/** Upcoming flights first (soonest departure first), already-departed flights after (most recent first). */
+function byNextDeparture(a: FlightState, b: FlightState): number {
+  const now = Date.now();
+  const aTime = new Date(a.estimatedDeparture).getTime();
+  const bTime = new Date(b.estimatedDeparture).getTime();
+  const aUpcoming = aTime >= now;
+  const bUpcoming = bTime >= now;
+  if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+  return aUpcoming ? aTime - bTime : bTime - aTime;
+}
+
 export function listFlights(originIata?: string): FlightState[] {
   const all = Array.from(store.values());
-  if (!originIata) return all;
-  const origin = originIata.toUpperCase();
-  return all.filter((f) => f.origin === origin);
+  const filtered = originIata ? all.filter((f) => f.origin === originIata.toUpperCase()) : all;
+  return filtered.sort(byNextDeparture);
 }
 
 export function getFlightByNumber(flightNumber: string, originIata?: string): FlightState | undefined {
@@ -63,7 +73,7 @@ function makeEvent(type: FlightUpdateEventType, flight: FlightState, message: st
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
 }
 
 /**

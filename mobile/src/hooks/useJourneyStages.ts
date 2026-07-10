@@ -1,16 +1,9 @@
 import { useMemo } from 'react';
 import { FlightState, JourneyStage, MethodEstimate } from '../types';
+import { formatIstTime, formatTimeInZone } from '../utils/time';
 
 function minutesUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
-}
-
-function formatTimeInZone(iso: string, timeZone: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone });
-  } catch {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
 }
 
 // How long after touchdown before a passenger is realistically off the aircraft,
@@ -96,7 +89,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'departed',
         label: 'Departed',
-        detail: `Departure ${new Date(flight.estimatedDeparture).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · lands ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local`,
+        detail: `Departure ${formatIstTime(flight.estimatedDeparture)} · lands ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local`,
         isDone: isDeparted,
         isActive: isDeparted,
       },

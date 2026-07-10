@@ -196,13 +196,28 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
   };
 }
 
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-/** Formats a Date as the local (no-offset) timestamp AeroDataBox expects, e.g. 2026-07-10T08:00 */
-function toLocalParam(date: Date): string {
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+/**
+ * Formats a Date as the no-offset local timestamp AeroDataBox expects (e.g.
+ * 2026-07-10T08:00), using the AIRPORT's timezone rather than the server's -
+ * the Codespace/host running this process is on UTC, and using its clock
+ * components here (instead of converting into the airport's local time)
+ * shifted the whole "today's departures" window by +5:30, so the list
+ * showed flights that had already departed hours ago instead of upcoming
+ * ones.
+ */
+function toLocalParam(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00';
+  const hour = get('hour') === '24' ? '00' : get('hour');
+  return `${get('year')}-${get('month')}-${get('day')}T${hour}:${get('minute')}`;
 }
 
 export async function fetchLiveDepartures(airport: OriginAirport): Promise<FlightState[]> {
@@ -211,8 +226,8 @@ export async function fetchLiveDepartures(airport: OriginAirport): Promise<Fligh
   }
 
   const now = new Date();
-  const from = toLocalParam(new Date(now.getTime() - config.aerodatabox.windowHoursBack * 60 * 60_000));
-  const to = toLocalParam(new Date(now.getTime() + config.aerodatabox.windowHoursForward * 60 * 60_000));
+  const from = toLocalParam(new Date(now.getTime() - config.aerodatabox.windowHoursBack * 60 * 60_000), airport.timezone);
+  const to = toLocalParam(new Date(now.getTime() + config.aerodatabox.windowHoursForward * 60 * 60_000), airport.timezone);
 
   // direction=Both returns arrivals alongside departures in the same call (no
   // extra quota cost), which is what lets us cross-reference aircraft

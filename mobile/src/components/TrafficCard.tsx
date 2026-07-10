@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { FlightState, Locality, TrafficEstimate } from '../types';
 import { colors } from '../theme';
 import { computeLeaveByTime } from '../utils/leaveBy';
+import { formatIstTime } from '../utils/time';
 
 interface Props {
   flight: FlightState;
@@ -13,9 +14,7 @@ interface Props {
   loading: boolean;
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+const formatTime = formatIstTime;
 
 export function TrafficCard({ flight, localities, selectedId, onSelect, estimate, loading }: Props) {
   const leaveBy = estimate ? computeLeaveByTime(flight, estimate) : null;

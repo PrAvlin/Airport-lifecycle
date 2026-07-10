@@ -54,7 +54,8 @@ export function JourneyScreen({ route }: Props) {
       </View>
       <View style={styles.subHeaderRow}>
         <Text style={styles.route}>
-          {flight.origin} → {flight.arrival.airportCity} ({flight.destination}) · {flight.airline}
+          {flight.origin} → {flight.arrival.airportCity}
+          {flight.destination !== 'N/A' ? ` (${flight.destination})` : ''} · {flight.airline}
         </Text>
         <DataSourceBadge source={flight.dataSource} />
       </View>

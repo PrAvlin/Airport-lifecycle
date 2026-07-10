@@ -54,6 +54,7 @@ export interface FlightState {
   status: FlightStatus;
   terminal: string;
   gate: string;
+  aircraftType?: string;
   boarding: MethodEstimate;
   boardingStartTime: string;
   boardingStartConfidence: 'estimated' | 'confirmed';

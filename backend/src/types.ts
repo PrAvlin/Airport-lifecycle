@@ -84,6 +84,8 @@ export interface FlightState {
   status: FlightStatus;
   terminal: string;
   gate: string;
+  /** Aircraft model, e.g. "Airbus A320neo" - present when the data source publishes it. */
+  aircraftType?: string;
   boarding: MethodEstimate;
   boardingStartTime: string;
   /** Whether boardingStartTime is airline-confirmed or estimated from typical lead times. */

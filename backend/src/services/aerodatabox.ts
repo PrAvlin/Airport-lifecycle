@@ -28,7 +28,7 @@ interface AeroDataBoxFlight {
   number?: string;
   status?: string;
   airline?: { name?: string };
-  aircraft?: { reg?: string };
+  aircraft?: { reg?: string; model?: string };
   departure?: AeroDataBoxMovement;
   arrival?: AeroDataBoxMovement;
   isCargo?: boolean;
@@ -169,6 +169,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
     status: deriveStatus(raw.status, estimatedDeparture),
     terminal,
     gate,
+    aircraftType: raw.aircraft?.model,
     boarding,
     boardingStartTime,
     boardingStartConfidence: 'estimated',

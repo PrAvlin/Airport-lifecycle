@@ -13,6 +13,8 @@ const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
 const ARRIVAL_TERMINALS = ['1', '2', '3'];
 const DESTINATIONS = ['BOM', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD', 'DEL', 'PNQ', 'BLR', 'CJB'];
 const INTERNATIONAL_DESTINATIONS = new Set(['DXB', 'SIN', 'LHR']);
+const SHORT_HAUL_AIRCRAFT = ['Airbus A320', 'Airbus A320neo', 'Airbus A321neo', 'Boeing 737-800', 'ATR 72-600'];
+const LONG_HAUL_AIRCRAFT = ['Boeing 777-300ER', 'Airbus A350-900', 'Boeing 787-9 Dreamliner'];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -104,6 +106,7 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
     status: 'scheduled',
     terminal,
     gate,
+    aircraftType: pick(destinationProfile.typicalFlightMinutes >= 180 ? LONG_HAUL_AIRCRAFT : SHORT_HAUL_AIRCRAFT),
     boarding,
     boardingStartTime: minutesFromNow(departureInMinutes - boardingLeadMinutes),
     boardingStartConfidence: 'estimated',

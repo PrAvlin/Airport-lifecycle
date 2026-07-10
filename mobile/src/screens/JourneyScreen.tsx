@@ -9,7 +9,7 @@ import { DataSourceBadge } from '../components/DataSourceBadge';
 import { MethodEstimateCard } from '../components/MethodEstimateCard';
 import { TrafficCard } from '../components/TrafficCard';
 import { colors, statusColor } from '../theme';
-import { formatIstTime } from '../utils/time';
+import { formatDuration, formatIstTime } from '../utils/time';
 import type { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Journey'>;
@@ -92,6 +92,18 @@ export function JourneyScreen({ route }: Props) {
             {flight.arrival.gate === 'TBD' ? 'Not yet published' : flight.arrival.gate}
           </Text>
         </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Flight duration</Text>
+          <Text style={styles.infoValue}>
+            {formatDuration(flight.estimatedDeparture, flight.arrival.estimatedArrival)}
+          </Text>
+        </View>
+        {flight.aircraftType && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoLabel}>Aircraft</Text>
+            <Text style={styles.infoValue}>{flight.aircraftType}</Text>
+          </View>
+        )}
       </View>
 
       <MethodEstimateCard

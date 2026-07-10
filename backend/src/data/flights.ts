@@ -5,7 +5,7 @@ const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
 const TERMINALS = ['T1', 'T2', 'T3'];
 const GATES = ['A1', 'A4', 'A12', 'B3', 'B7', 'C2', 'C9', 'D5'];
 const BOARDING_METHODS: BoardingMethod[] = ['jet_bridge', 'shuttle_bus', 'walk_to_aircraft'];
-const DESTINATIONS = ['BOM', 'BLR', 'DXB', 'SIN', 'LHR', 'DEL', 'MAA', 'HYD'];
+const DESTINATIONS = ['BOM', 'BLR', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD'];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];

@@ -16,7 +16,7 @@ interface AeroDataBoxTime {
 }
 
 interface AeroDataBoxMovement {
-  airport?: { icao?: string; iata?: string; name?: string; countryCode?: string };
+  airport?: { icao?: string; iata?: string; name?: string; municipalityName?: string; countryCode?: string };
   scheduledTime?: AeroDataBoxTime;
   revisedTime?: AeroDataBoxTime;
   terminal?: string;
@@ -182,6 +182,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
     arrival: {
       airportIata: destinationIata,
       airportName: raw.arrival?.airport?.name ?? destinationProfile.name,
+      airportCity: raw.arrival?.airport?.municipalityName ?? destinationProfile.city,
       terminal: arrivalTerminal,
       timezone: destinationProfile.timezone,
       scheduledArrival: arrivalScheduledUtc,

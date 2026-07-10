@@ -30,6 +30,7 @@ export interface MethodEstimate {
 export interface ArrivalInfo {
   airportIata: string;
   airportName: string;
+  airportCity: string;
   terminal: string;
   timezone: string;
   scheduledArrival: string;

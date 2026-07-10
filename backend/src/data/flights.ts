@@ -113,6 +113,7 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
     arrival: {
       airportIata: destination,
       airportName: destinationProfile.name,
+      airportCity: destinationProfile.city,
       terminal: arrivalTerminal,
       timezone: destinationProfile.timezone,
       scheduledArrival,

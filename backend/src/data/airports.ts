@@ -54,13 +54,16 @@ export const ORIGIN_AIRPORTS: Record<string, OriginAirport> = {
     longitude: 77.7066,
     timezone: 'Asia/Kolkata',
     terminals: {
-      T1: { aerobridgeShare: 0.4, reason: 'T1 is an older terminal that mixes aerobridge gates with remote stands reached by bus.' },
+      T1: { aerobridgeShare: 0.64, reason: 'T1 mixes aerobridge and ground-level bus gates across its numbering — roughly 25 of its ~39 gates are aerobridge-served.' },
       T2: { aerobridgeShare: 0.9, reason: 'T2 is a modern terminal where nearly all gates use aerobridges.' },
     },
     defaultTerminal: 'T1',
     gateRules: [
-      { terminal: 'T1', gates: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level gate at T1 — ground-floor gates board by bus across the apron' },
-      { terminal: 'T1', gates: ['10', '11', '12', '13', '14', '15', '16', '17', '18'], method: 'aerobridge', probability: 0.93, note: 'is an upper-level contact gate at T1 — these connect straight to an aerobridge' },
+      { terminal: 'T1', gates: ['1', '2'], method: 'aerobridge', probability: 0.95, note: 'is an aerobridge gate at T1' },
+      { terminal: 'T1', gates: ['3', '4', '5', '6', '7', '8', '9'], method: 'shuttle_bus', probability: 0.95, note: 'is a ground-level bus gate at T1' },
+      { terminal: 'T1', gates: ['12', '13', '14', '15', '16', '17', '18'], method: 'aerobridge', probability: 0.95, note: 'is an aerobridge gate at T1' },
+      { terminal: 'T1', gates: ['19', '20', '21', '22', '23', '24', '25'], method: 'shuttle_bus', probability: 0.95, note: 'is a ground-level bus gate at T1' },
+      { terminal: 'T1', gates: ['28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '43'], method: 'aerobridge', probability: 0.95, note: 'is an aerobridge gate at T1' },
       { terminal: 'T2', gates: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31'], method: 'aerobridge', probability: 0.95, note: 'is an upper-level contact gate at T2 — aerobridge boarding' },
       { terminal: 'T2', gates: ['40', '41', '42', '43'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level bus gate at T2' },
     ],
@@ -85,16 +88,15 @@ export const ORIGIN_AIRPORTS: Record<string, OriginAirport> = {
     longitude: 80.1709,
     timezone: 'Asia/Kolkata',
     terminals: {
-      T1: { aerobridgeShare: 0.7, reason: 'T1 (domestic) has a good number of aerobridge gates but still uses ground-level bus gates at peak times.' },
-      T2: { aerobridgeShare: 0.8, reason: 'T2 (the new integrated international terminal) is mostly aerobridge-served with some remote stands.' },
+      // T1 domestic has 9 boarding gates total: 3 on the upper level (aerobridge) and
+      // 6 on the ground level (bus) - confirmed via public airport-facility sources, but
+      // which specific gate numbers are which isn't published, so we can't do gate-level
+      // rules here the way we can for BLR/CJB - this terminal-wide rate is the honest ceiling.
+      T1: { aerobridgeShare: 0.33, reason: "T1 (domestic) has 9 gates total: only 3 are on the upper level served by aerobridge, the other 6 board by bus from the ground level." },
+      T2: { aerobridgeShare: 0.85, reason: 'The international terminal complex has 13 aerobridges and is predominantly contact-gate served.' },
     },
     defaultTerminal: 'T1',
-    gateRules: [
-      { terminal: 'T1', gates: ['1', '2', '3', '4', '5', '6'], method: 'aerobridge', probability: 0.92, note: 'is an upper-level contact gate at Chennai T1 — aerobridge boarding' },
-      { terminal: 'T1', gates: ['7', '8', '9', '10'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level gate at Chennai T1 — ground-floor gates board by bus' },
-      { terminal: 'T2', gates: ['11', '12', '13', '14', '15', '16', '17'], method: 'aerobridge', probability: 0.93, note: 'is an upper-level contact gate at Chennai T2 — aerobridge boarding' },
-      { terminal: 'T2', gates: ['18', '19', '20'], method: 'shuttle_bus', probability: 0.88, note: 'is a ground-level bus gate at Chennai T2' },
-    ],
+    gateRules: [],
     localities: [
       { id: 't-nagar', name: 'T. Nagar', latitude: 13.0418, longitude: 80.2341, typicalMinutesNoTraffic: 35 },
       { id: 'anna-nagar', name: 'Anna Nagar', latitude: 13.085, longitude: 80.2101, typicalMinutesNoTraffic: 45 },

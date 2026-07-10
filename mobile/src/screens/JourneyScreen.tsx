@@ -5,9 +5,8 @@ import { useFlightStatus } from '../hooks/useFlightStatus';
 import { useJourneyStages } from '../hooks/useJourneyStages';
 import { useTraffic } from '../hooks/useTraffic';
 import { StageTimeline } from '../components/StageTimeline';
-import { BoardingMethodBadge } from '../components/BoardingMethodBadge';
 import { DataSourceBadge } from '../components/DataSourceBadge';
-import { BoardingReportPrompt } from '../components/BoardingReportPrompt';
+import { MethodEstimateCard } from '../components/MethodEstimateCard';
 import { TrafficCard } from '../components/TrafficCard';
 import { colors, statusColor } from '../theme';
 import type { RootStackParamList } from '../navigation';
@@ -89,16 +88,13 @@ export function JourneyScreen({ route }: Props) {
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>How you'll board</Text>
-      <BoardingMethodBadge method={flight.boardingMethod} />
-      {flight.boardingMethodConfidence === 'estimated' ? (
-        <>
-          <Text style={styles.estimateNote}>Estimated from terminal — confirm at your gate display.</Text>
-          <BoardingReportPrompt key={`${flight.id}:board`} flightNumber={flight.flightNumber} phase="board" />
-        </>
-      ) : (
-        <Text style={styles.confirmedNote}>✓ Confirmed by passengers</Text>
-      )}
+      <MethodEstimateCard
+        key={`${flight.id}:board`}
+        title="How you'll board"
+        estimate={flight.boarding}
+        flightNumber={flight.flightNumber}
+        phase="board"
+      />
 
       <TrafficCard
         flight={flight}
@@ -107,6 +103,14 @@ export function JourneyScreen({ route }: Props) {
         onSelect={traffic.setSelectedId}
         estimate={traffic.estimate}
         loading={traffic.loading}
+      />
+
+      <MethodEstimateCard
+        key={`${flight.id}:deplane`}
+        title="How you'll get off the plane"
+        estimate={flight.arrival.disembark}
+        flightNumber={flight.flightNumber}
+        phase="deplane"
       />
 
       <Text style={styles.sectionTitle}>Your journey</Text>
@@ -141,6 +145,4 @@ const styles = StyleSheet.create({
   infoLabel: { color: colors.textSecondary, fontSize: 12 },
   infoValue: { color: colors.textPrimary, fontSize: 17, fontWeight: '700', marginTop: 4 },
   sectionTitle: { color: colors.textPrimary, fontSize: 17, fontWeight: '700', marginTop: 28, marginBottom: 12 },
-  estimateNote: { color: colors.textSecondary, fontSize: 12, marginTop: 8 },
-  confirmedNote: { color: colors.success, fontSize: 12, marginTop: 8, fontWeight: '600' },
 });

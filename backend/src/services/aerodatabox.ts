@@ -1,7 +1,7 @@
 import { config } from '../config';
 import { BLR_AIRPORT, BlrTerminal } from '../data/airport';
 import { getDestinationProfile } from '../data/destinationAirports';
-import { estimateBoardingMethod, estimateDisembarkMethod } from './boardingHeuristic';
+import { boardingBaseShareAndReason, disembarkBaseShareAndReason, estimateAndRegister } from './methodEstimate';
 import {
   estimateArrivalImmigrationWaitMinutes,
   estimateBaggageWaitMinutes,
@@ -130,14 +130,35 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): Flig
   const boardingStartTime = new Date(new Date(estimatedDeparture).getTime() - boardingLeadMinutes * 60_000).toISOString();
   const now = new Date();
   const isQuickTurn = !!raw.aircraft?.reg && quickTurnRegs.has(raw.aircraft.reg);
+  const id = `${flightNumber}_${scheduledUtc}`;
 
   const destinationProfile = getDestinationProfile(destinationIata);
   const arrivalTerminal = raw.arrival?.terminal ?? 'TBD';
   const arrivalScheduledUtc = raw.arrival?.scheduledTime?.utc ?? estimatedDeparture;
   const arrivalEstimatedUtc = raw.arrival?.revisedTime?.utc ?? arrivalScheduledUtc;
 
+  const boardShareReason = boardingBaseShareAndReason(terminal);
+  const boarding = estimateAndRegister(
+    id,
+    'board',
+    boardShareReason.share,
+    boardShareReason.reason,
+    isQuickTurn,
+    `board:${terminal}:${gate}:${flightNumber}`,
+  );
+
+  const deplaneShareReason = disembarkBaseShareAndReason(destinationIata);
+  const disembark = estimateAndRegister(
+    id,
+    'deplane',
+    deplaneShareReason.share,
+    deplaneShareReason.reason,
+    isQuickTurn,
+    `deplane:${destinationIata}:${arrivalTerminal}:${flightNumber}`,
+  );
+
   return {
-    id: `${flightNumber}_${scheduledUtc}`,
+    id,
     flightNumber,
     airline: raw.airline?.name ?? 'Unknown Airline',
     origin: BLR_AIRPORT.iata,
@@ -148,8 +169,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): Flig
     status: deriveStatus(raw.status, estimatedDeparture),
     terminal,
     gate,
-    boardingMethod: estimateBoardingMethod(terminal, gate, flightNumber, isQuickTurn),
-    boardingMethodConfidence: 'estimated',
+    boarding,
     boardingStartTime,
     boardingStartConfidence: 'estimated',
     checkpoints: {
@@ -167,8 +187,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): Flig
       timezone: destinationProfile.timezone,
       scheduledArrival: arrivalScheduledUtc,
       estimatedArrival: arrivalEstimatedUtc,
-      disembarkMethod: estimateDisembarkMethod(destinationIata, arrivalTerminal, flightNumber, isQuickTurn),
-      disembarkMethodConfidence: 'estimated',
+      disembark,
       baggageBelt: raw.arrival?.baggageBelt,
       immigrationWaitMinutes: isInternational
         ? estimateArrivalImmigrationWaitMinutes(new Date(arrivalEstimatedUtc), destinationProfile.timezone)

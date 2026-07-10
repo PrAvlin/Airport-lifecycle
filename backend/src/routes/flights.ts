@@ -35,10 +35,10 @@ flightsRouter.post('/:flightNumber/boarding-report', (req, res) => {
     return;
   }
 
-  const result = reportBoardingMethod(req.params.flightNumber, phase, method);
-  if (!result) {
+  const flight = reportBoardingMethod(req.params.flightNumber, phase, method);
+  if (!flight) {
     res.status(404).json({ error: `Flight ${req.params.flightNumber} not found among today's BLR departures` });
     return;
   }
-  res.json({ flight: result.flight, locked: result.locked });
+  res.json({ flight });
 });

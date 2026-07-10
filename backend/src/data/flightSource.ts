@@ -1,7 +1,8 @@
 import { config } from '../config';
 import { DataSource, FlightState, FlightUpdateEvent, FlightUpdateEventType } from '../types';
 import { seedDemoFlights } from './flights';
-import { applyReportOverlay, ReportPhase, submitReport } from '../services/boardingReports';
+import { ReportPhase, submitReport } from '../services/boardingReports';
+import { recomputeEstimate } from '../services/methodEstimate';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
@@ -36,7 +37,7 @@ export function seedDemoMode(): void {
   currentDataSource = 'demo';
   store.clear();
   for (const flight of seedDemoFlights(8)) {
-    store.set(flight.flightNumber, applyReportOverlay(flight));
+    store.set(flight.flightNumber, flight);
   }
 }
 
@@ -44,7 +45,7 @@ export function patchDemoFlight(flightNumber: string, patch: Partial<FlightState
   const key = flightNumber.toUpperCase();
   const existing = store.get(key);
   if (!existing) return undefined;
-  const updated = applyReportOverlay({ ...existing, ...patch, lastUpdated: new Date().toISOString() });
+  const updated: FlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
   store.set(key, updated);
   return updated;
 }
@@ -59,18 +60,18 @@ function formatTime(iso: string): string {
 
 /**
  * Merges a freshly-fetched live snapshot into the store, diffing against the
- * previous state per flight so the same gate/boarding-method/status/delay
- * notifications used in demo mode fire for real changes too. Any locked
- * crowd-sourced confirmations are re-applied on top, since a fresh API poll
- * would otherwise overwrite them with the plain heuristic guess again.
+ * previous state per flight so the same gate/boarding-confidence/status/
+ * delay notifications used in demo mode fire for real changes too. Each
+ * fetched flight already carries a freshly-computed boarding/disembark
+ * estimate (built from current crowd report tallies), so no separate
+ * overlay step is needed here.
  */
 export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): void {
   currentDataSource = 'live';
   lastError = null;
   lastFetchedAt = new Date().toISOString();
 
-  for (const fetched of flights) {
-    const nextFlight = applyReportOverlay(fetched);
+  for (const nextFlight of flights) {
     const previous = store.get(nextFlight.flightNumber);
     store.set(nextFlight.flightNumber, nextFlight);
 
@@ -79,8 +80,8 @@ export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): 
     if (previous.gate !== nextFlight.gate) {
       emit(makeEvent('gate_change', nextFlight, `Gate changed to ${nextFlight.gate} for ${nextFlight.flightNumber}`));
     }
-    if (previous.boardingMethod !== nextFlight.boardingMethod) {
-      emit(makeEvent('boarding_method_change', nextFlight, `${nextFlight.flightNumber} boarding method updated`));
+    if (previous.boarding.confidenceLevel !== nextFlight.boarding.confidenceLevel) {
+      emit(makeEvent('boarding_method_change', nextFlight, `${nextFlight.flightNumber} boarding confidence updated`));
     }
     if (previous.estimatedDeparture !== nextFlight.estimatedDeparture) {
       emit(
@@ -106,30 +107,41 @@ export function recordFetchError(message: string): void {
   lastError = message;
 }
 
-/** Submits a passenger's report of what they actually saw; applies + broadcasts immediately once consensus locks it in. */
+/**
+ * Submits a passenger's report of what they actually saw boarding or
+ * deplaning, recomputes that flight's estimate immediately (rather than
+ * waiting for the next poll), and broadcasts if the confidence level
+ * actually changed as a result.
+ */
 export function reportBoardingMethod(
   flightNumber: string,
   phase: ReportPhase,
-  method: FlightState['boardingMethod'],
-): { flight: FlightState; locked: boolean } | undefined {
+  method: Parameters<typeof submitReport>[2],
+): FlightState | undefined {
   const flight = getFlightByNumber(flightNumber);
   if (!flight) return undefined;
 
-  const result = submitReport(flight.id, phase, method);
-  if (!result.locked) {
-    return { flight, locked: false };
-  }
+  submitReport(flight.id, phase, method);
+  const nextEstimate = recomputeEstimate(flight.id, phase);
+  if (!nextEstimate) return flight;
 
-  const updated = applyReportOverlay(flight);
+  const previousEstimate = phase === 'board' ? flight.boarding : flight.arrival.disembark;
+  const updated: FlightState =
+    phase === 'board'
+      ? { ...flight, boarding: nextEstimate, lastUpdated: new Date().toISOString() }
+      : { ...flight, arrival: { ...flight.arrival, disembark: nextEstimate }, lastUpdated: new Date().toISOString() };
+
   store.set(flight.flightNumber, updated);
 
-  if (broadcastEmitter) {
+  if (broadcastEmitter && previousEstimate.confidenceLevel !== nextEstimate.confidenceLevel) {
     const label = phase === 'board' ? 'Boarding' : 'Deplaning';
-    const methodLabel = result.method!.replace(/_/g, ' ');
-    broadcastEmitter(
-      makeEvent('boarding_method_change', updated, `${label} method for ${flightNumber} confirmed by fellow passengers: ${methodLabel}`),
-    );
+    const methodLabel = nextEstimate.method.replace(/_/g, ' ');
+    const message =
+      nextEstimate.confidenceLevel === 'confirmed'
+        ? `${label} method for ${flightNumber} confirmed by fellow passengers: ${methodLabel}`
+        : `${label} method for ${flightNumber} now looks likely: ${methodLabel}`;
+    broadcastEmitter(makeEvent('boarding_method_change', updated, message));
   }
 
-  return { flight: updated, locked: true };
+  return updated;
 }

@@ -41,7 +41,7 @@ export function BoardingReportPrompt({ flightNumber, phase }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.prompt}>Was this correct? Let other passengers know.</Text>
+      <Text style={styles.prompt}>Seen this in person? Tell other passengers what to expect:</Text>
       <View style={styles.row}>
         {OPTIONS.map((opt) => (
           <TouchableOpacity key={opt.method} style={styles.chip} disabled={submitting} onPress={() => submit(opt.method)}>

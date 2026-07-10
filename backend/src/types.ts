@@ -28,6 +28,32 @@ export interface CheckpointEstimate {
   estimatedWaitMinutes: number;
 }
 
+/**
+ * How confident we actually are that `method` is correct, expressed
+ * honestly rather than as a flat estimated/confirmed flag:
+ * - 'confirmed': locked in by matching crowd reports on this exact flight.
+ * - 'likely': a strong-enough signal (airport layout and/or a quick aircraft
+ *   turnaround) that showing a single answer is reasonable, but it's still
+ *   not verified - `probability` says how sure we are.
+ * - 'uncertain': genuinely a toss-up (e.g. a mixed terminal with no other
+ *   signal) - callers must NOT present `method` as a confident single
+ *   answer in this case.
+ */
+export type MethodConfidenceLevel = 'confirmed' | 'likely' | 'uncertain';
+
+export interface MethodEstimate {
+  method: BoardingMethod;
+  /** 0-1 probability that `method` is the correct one. */
+  probability: number;
+  confidenceLevel: MethodConfidenceLevel;
+  /** Human-readable reasons behind the estimate, most significant first. */
+  reasoning: string[];
+  /** Crowd reports tallied so far for this exact flight, e.g. { jet_bridge: 2 }. */
+  reportCounts: Partial<Record<BoardingMethod, number>>;
+  /** How many more matching reports on the leading method would lock in 'confirmed'. 0 if already confirmed. */
+  reportsToConfirm: number;
+}
+
 export interface ArrivalInfo {
   airportIata: string;
   airportName: string;
@@ -35,8 +61,7 @@ export interface ArrivalInfo {
   timezone: string;
   scheduledArrival: string;
   estimatedArrival: string;
-  disembarkMethod: BoardingMethod;
-  disembarkMethodConfidence: 'estimated' | 'confirmed';
+  disembark: MethodEstimate;
   /** Only present when the source (AeroDataBox) actually publishes a belt number. */
   baggageBelt?: string;
   /** Only present for international arrivals. */
@@ -56,9 +81,7 @@ export interface FlightState {
   status: FlightStatus;
   terminal: string;
   gate: string;
-  boardingMethod: BoardingMethod;
-  /** Whether boardingMethod is real airline-confirmed data or a heuristic estimate. */
-  boardingMethodConfidence: 'estimated' | 'confirmed';
+  boarding: MethodEstimate;
   boardingStartTime: string;
   /** Whether boardingStartTime is airline-confirmed or estimated from typical lead times. */
   boardingStartConfidence: 'estimated' | 'confirmed';

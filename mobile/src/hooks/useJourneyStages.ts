@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FlightState, JourneyStage } from '../types';
+import { FlightState, JourneyStage, MethodEstimate } from '../types';
 
 function minutesUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
@@ -17,6 +17,23 @@ function formatTimeInZone(iso: string, timeZone: string): string {
 // used only to sequence the timeline - not a claim about any specific flight.
 const TAXI_TO_STAND_MINUTES = 15;
 const DISEMBARK_MINUTES = 10;
+
+/**
+ * Summarizes a method estimate for the timeline in one line, honestly
+ * reflecting how sure we actually are - never stating "jet bridge" or
+ * "shuttle bus" as if it were fact unless it's confirmed or a strong
+ * enough signal to call "likely."
+ */
+function summarizeMethodEstimate(estimate: MethodEstimate, labelFn: (m: FlightState['boarding']['method']) => string): string {
+  if (estimate.confidenceLevel === 'uncertain') {
+    return 'Not yet known whether this is a jet bridge, a shuttle bus, or a short walk — could be either. Come prepared for a bus just in case.';
+  }
+  const base = labelFn(estimate.method);
+  if (estimate.confidenceLevel === 'confirmed') {
+    return `${base} (confirmed by fellow passengers)`;
+  }
+  return `${base} (~${Math.round(estimate.probability * 100)}% likely — not yet confirmed)`;
+}
 
 export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
   return useMemo(() => {
@@ -72,9 +89,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'boarding',
         label: 'Boarding',
-        detail:
-          boardingMethodLabel(flight.boardingMethod) +
-          (flight.boardingMethodConfidence === 'estimated' ? ' (estimated — confirm at your gate display)' : ''),
+        detail: summarizeMethodEstimate(flight.boarding, boardingMethodLabel),
         isDone: flight.status === 'gate_closed' || isDeparted,
         isActive: isBoardingOrLater && !isDeparted,
       },
@@ -106,9 +121,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'deplaning',
         label: 'Deplaning',
-        detail:
-          disembarkMethodLabel(flight.arrival.disembarkMethod) +
-          (flight.arrival.disembarkMethodConfidence === 'estimated' ? ' (estimated — confirm onboard)' : ''),
+        detail: summarizeMethodEstimate(flight.arrival.disembark, disembarkMethodLabel),
         isDone: minutesToDeplaningDone <= 0,
         isActive: minutesToGate <= 0 && minutesToDeplaningDone > 0,
       },
@@ -147,7 +160,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
   }, [flight]);
 }
 
-export function boardingMethodLabel(method: FlightState['boardingMethod']): string {
+export function boardingMethodLabel(method: FlightState['boarding']['method']): string {
   switch (method) {
     case 'jet_bridge':
       return 'Boarding via jet bridge — walk directly from the gate to the aircraft door.';
@@ -160,7 +173,7 @@ export function boardingMethodLabel(method: FlightState['boardingMethod']): stri
   }
 }
 
-export function disembarkMethodLabel(method: FlightState['boardingMethod']): string {
+export function disembarkMethodLabel(method: FlightState['boarding']['method']): string {
   switch (method) {
     case 'jet_bridge':
       return 'Deplaning via jet bridge — walk directly off into the terminal.';

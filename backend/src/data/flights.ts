@@ -1,6 +1,6 @@
 import { BLR_AIRPORT, BlrTerminal } from './airport';
 import { getDestinationProfile } from './destinationAirports';
-import { estimateBoardingMethod, estimateDisembarkMethod } from '../services/boardingHeuristic';
+import { boardingBaseShareAndReason, disembarkBaseShareAndReason, estimateAndRegister } from '../services/methodEstimate';
 import {
   estimateArrivalImmigrationWaitMinutes,
   estimateBaggageWaitMinutes,
@@ -60,8 +60,24 @@ export function createMockFlight(overrides: Partial<FlightState> = {}): FlightSt
     new Date(estimatedDeparture).getTime() + destinationProfile.typicalFlightMinutes * 60_000,
   ).toISOString();
 
+  const id = `${flightNumber}_${estimatedDeparture}`;
+
+  // Demo mode has no real aircraft-rotation data to reason from, so isQuickTurn is always false here.
+  const boardShareReason = boardingBaseShareAndReason(terminal);
+  const boarding = estimateAndRegister(id, 'board', boardShareReason.share, boardShareReason.reason, false, `board:${terminal}:${gate}:${flightNumber}`);
+
+  const deplaneShareReason = disembarkBaseShareAndReason(destination);
+  const disembark = estimateAndRegister(
+    id,
+    'deplane',
+    deplaneShareReason.share,
+    deplaneShareReason.reason,
+    false,
+    `deplane:${destination}:${arrivalTerminal}:${flightNumber}`,
+  );
+
   const flight: FlightState = {
-    id: `${flightNumber}_${estimatedDeparture}`,
+    id,
     flightNumber,
     airline,
     origin: BLR_AIRPORT.iata,
@@ -72,8 +88,7 @@ export function createMockFlight(overrides: Partial<FlightState> = {}): FlightSt
     status: 'scheduled',
     terminal,
     gate,
-    boardingMethod: estimateBoardingMethod(terminal, gate, flightNumber),
-    boardingMethodConfidence: 'estimated',
+    boarding,
     boardingStartTime: minutesFromNow(departureInMinutes - boardingLeadMinutes),
     boardingStartConfidence: 'estimated',
     checkpoints: {
@@ -91,8 +106,7 @@ export function createMockFlight(overrides: Partial<FlightState> = {}): FlightSt
       timezone: destinationProfile.timezone,
       scheduledArrival,
       estimatedArrival: scheduledArrival,
-      disembarkMethod: estimateDisembarkMethod(destination, arrivalTerminal, flightNumber),
-      disembarkMethodConfidence: 'estimated',
+      disembark,
       baggageBelt: undefined,
       immigrationWaitMinutes: isInternational
         ? estimateArrivalImmigrationWaitMinutes(new Date(scheduledArrival), destinationProfile.timezone)

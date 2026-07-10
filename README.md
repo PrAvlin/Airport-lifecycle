@@ -25,31 +25,43 @@ mobile/    Expo (React Native + TypeScript) app consuming that API.
 
 **What's not available from any free API, for any airport:** whether a
 specific flight boards or deplanes via jet bridge vs. shuttle bus, and live
-security/immigration/baggage queue lengths. The backend estimates these
-instead of inventing fake "live" numbers, and improves the estimate two ways:
+security/immigration/baggage queue lengths.
 
-- **Terminal/airport-layout heuristic.** Boarding at BLR is derived from its
-  real terminal layout (T2, opened 2022, is almost entirely aerobridge-served;
-  T1 mixes aerobridge gates with bused remote stands). Deplaning at the
-  destination uses a small curated profile per airport BLR actually flies to
-  (LHR, DXB, SIN, DEL, BOM, HYD, MAA, PNQ), with a generic fallback for
-  anything else. Always labeled "estimated," never presented as confirmed.
+For the boarding/deplaning method, the backend does **not** just pick one
+option and present it as fact — a confidently-stated wrong answer is worse
+than an honest "we don't know yet," since it leaves a passenger unprepared
+for a bus or a walk across the tarmac. Instead it computes a real confidence
+level from three inputs and is upfront about which one it's using:
+
+- **Terminal/airport-layout base rate.** BLR's T2 (opened 2022) is almost
+  entirely aerobridge-served; T1 mixes aerobridge gates with bused remote
+  stands. Deplaning at the destination uses a small curated profile per
+  airport BLR actually flies to (LHR, DXB, SIN, DEL, BOM, HYD, MAA, PNQ),
+  with a generic fallback for anything else.
 - **Aircraft-rotation signal.** AeroDataBox reports each flight's aircraft
   registration and real scheduled times. If the same airframe that just
   landed at BLR is scheduled to depart again within ~90 minutes, that's a
   real operational signal (not a guess) that it's on a contact/aerobridge
   stand, since airlines route fast turnarounds to bridge gates whenever
-  possible. This is cross-referenced from data already being fetched, at no
-  extra API-quota cost (see `direction=Both` in `aerodatabox.ts`).
-- **Crowdsourced confirmation.** Passengers can report what they actually saw
-  boarding or deplaning (`POST /flights/:flightNumber/boarding-report`). Once
-  3 independent reports agree for that specific flight, it's locked in as
-  `confirmed` and stops being an estimate — the same pattern Waze/Maps use for
-  crowd-verified data. The mobile app shows a quick "Was this correct?"
-  prompt under the boarding badge while it's still an estimate.
-- **Security/immigration/baggage wait** uses a time-of-day-based typical
-  estimate (peak vs. off-peak hours, computed in the destination's local
-  timezone for arrival-side waits), also labeled as an estimate.
+  possible — cross-referenced from data already being fetched, at no extra
+  API-quota cost (see `direction=Both` in `aerodatabox.ts`).
+- **Crowdsourced reports.** Passengers can report what they actually saw
+  (`POST /flights/:flightNumber/boarding-report`). Each report shifts the
+  estimate immediately; once 3 independent reports agree for that specific
+  flight, it locks in as `confirmed`.
+
+These combine into one of three confidence levels, and the app's behavior
+changes with it — not just the caption:
+- **`confirmed`** (crowd-verified): shows a solid badge.
+- **`likely`** (probability ≥ 75%, e.g. T2's base rate alone clears this):
+  shows a badge with the probability and the reasoning, plus a report prompt.
+- **`uncertain`** (a genuine toss-up, e.g. T1 with no other signal): shows
+  **no confident answer at all** — just the reasoning, a practical "come
+  prepared for a bus" tip, and the report prompt front and center.
+
+**Security/immigration/baggage wait** uses a time-of-day-based typical
+estimate (peak vs. off-peak hours, computed in the destination's local
+timezone for arrival-side waits), also always labeled as an estimate.
 
 ### Demo mode
 

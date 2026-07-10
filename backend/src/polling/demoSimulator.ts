@@ -1,11 +1,9 @@
-import { BoardingMethod, FlightState, FlightStatus, FlightUpdateEvent, FlightUpdateEventType } from '../types';
+import { FlightState, FlightStatus, FlightUpdateEvent, FlightUpdateEventType } from '../types';
 import { listFlights, patchDemoFlight } from '../data/flightSource';
-import { getConfirmedMethod } from '../services/boardingReports';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
 const GATES = ['1', '4', '12', '3', '7', '2', '9', '5'];
-const BOARDING_METHODS: BoardingMethod[] = ['jet_bridge', 'shuttle_bus', 'walk_to_aircraft'];
 
 function minutesUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
@@ -35,18 +33,7 @@ function tickFlight(flight: FlightState, emit: EventEmitter): void {
     }
   }
 
-  if (flight.status === 'scheduled' && roll >= 0.06 && roll < 0.11 && !getConfirmedMethod(flight.id, 'board')) {
-    const options = BOARDING_METHODS.filter((m) => m !== flight.boardingMethod);
-    const newMethod = options[Math.floor(Math.random() * options.length)];
-    const updated = patchDemoFlight(flight.flightNumber, { boardingMethod: newMethod });
-    if (updated) {
-      const label = newMethod === 'jet_bridge' ? 'jet bridge' : newMethod === 'shuttle_bus' ? 'shuttle bus' : 'walk to aircraft';
-      emitUpdate(emit, 'boarding_method_change', updated, `${flight.flightNumber} will now board via ${label}`);
-    }
-    return;
-  }
-
-  if ((flight.status === 'scheduled' || flight.status === 'delayed') && roll >= 0.11 && roll < 0.15) {
+  if ((flight.status === 'scheduled' || flight.status === 'delayed') && roll >= 0.06 && roll < 0.15) {
     const delayMinutes = 10 + Math.floor(Math.random() * 20);
     const newDeparture = new Date(new Date(flight.estimatedDeparture).getTime() + delayMinutes * 60_000).toISOString();
     const newBoarding = new Date(new Date(flight.boardingStartTime).getTime() + delayMinutes * 60_000).toISOString();

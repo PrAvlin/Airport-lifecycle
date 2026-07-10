@@ -16,6 +16,17 @@ export interface CheckpointEstimate {
   estimatedWaitMinutes: number;
 }
 
+export type MethodConfidenceLevel = 'confirmed' | 'likely' | 'uncertain';
+
+export interface MethodEstimate {
+  method: BoardingMethod;
+  probability: number;
+  confidenceLevel: MethodConfidenceLevel;
+  reasoning: string[];
+  reportCounts: Partial<Record<BoardingMethod, number>>;
+  reportsToConfirm: number;
+}
+
 export interface ArrivalInfo {
   airportIata: string;
   airportName: string;
@@ -23,8 +34,7 @@ export interface ArrivalInfo {
   timezone: string;
   scheduledArrival: string;
   estimatedArrival: string;
-  disembarkMethod: BoardingMethod;
-  disembarkMethodConfidence: 'estimated' | 'confirmed';
+  disembark: MethodEstimate;
   baggageBelt?: string;
   immigrationWaitMinutes?: number;
   baggageWaitMinutes: number;
@@ -42,8 +52,7 @@ export interface FlightState {
   status: FlightStatus;
   terminal: string;
   gate: string;
-  boardingMethod: BoardingMethod;
-  boardingMethodConfidence: 'estimated' | 'confirmed';
+  boarding: MethodEstimate;
   boardingStartTime: string;
   boardingStartConfidence: 'estimated' | 'confirmed';
   checkpoints: {

@@ -5,7 +5,7 @@ import { BoardingMethod } from '../types';
 
 export const flightsRouter = Router();
 
-const VALID_METHODS: BoardingMethod[] = ['jet_bridge', 'shuttle_bus', 'walk_to_aircraft'];
+const VALID_METHODS: BoardingMethod[] = ['aerobridge', 'shuttle_bus'];
 
 function airportParam(raw: unknown): string | undefined {
   if (typeof raw !== 'string' || !raw.trim()) return undefined;

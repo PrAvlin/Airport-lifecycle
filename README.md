@@ -24,7 +24,7 @@ mobile/    Expo (React Native + TypeScript) app consuming that API.
 | Live drive-time traffic to each airport | [TomTom Routing API](https://developer.tomtom.com/routing-api) | 2,500 requests/day | Used from per-city locality presets (Bengaluru, Chennai, Coimbatore) to each airport's coordinates. |
 
 **What's not available from any free API, for any airport:** whether a
-specific flight boards or deplanes via jet bridge vs. shuttle bus, and live
+specific flight boards or deplanes via aerobridge vs. shuttle bus, and live
 security/immigration/baggage queue lengths.
 
 For the boarding/deplaning method, the backend does **not** just pick one
@@ -112,7 +112,7 @@ Endpoints:
 - `GET /airports` — supported origin airports (BLR, MAA, CJB)
 - `GET /flights?airport=MAA` — today's departures for that airport (live or demo) + `meta.dataSource`
 - `GET /flights/:flightNumber?airport=MAA` — a single flight's current state (departure + arrival/deplaning info)
-- `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'jet_bridge'|'shuttle_bus'|'walk_to_aircraft', airport?: 'MAA' }`; submits a passenger's crowdsourced report
+- `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'aerobridge'|'shuttle_bus', airport?: 'MAA' }`; submits a passenger's crowdsourced report
 - `GET /traffic/:airport/localities` — preset localities for that city
 - `GET /traffic/:airport/:localityId` — live (or static) drive time from that locality to the airport
 - Socket.IO: emit `subscribe`/`unsubscribe` with a flight number; listen for `flight:snapshot` and `flight:update`

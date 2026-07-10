@@ -11,9 +11,8 @@ interface Props {
 }
 
 const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
-  { method: 'jet_bridge', label: 'Jet Bridge', icon: '🌉' },
+  { method: 'aerobridge', label: 'Aerobridge', icon: '🌉' },
   { method: 'shuttle_bus', label: 'Shuttle Bus', icon: '🚌' },
-  { method: 'walk_to_aircraft', label: 'Walk', icon: '🚶' },
 ];
 
 export function BoardingReportPrompt({ flightNumber, airport, phase }: Props) {

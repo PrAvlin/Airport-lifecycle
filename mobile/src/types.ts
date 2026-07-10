@@ -1,4 +1,4 @@
-export type BoardingMethod = 'jet_bridge' | 'shuttle_bus' | 'walk_to_aircraft';
+export type BoardingMethod = 'aerobridge' | 'shuttle_bus';
 
 export type FlightStatus =
   | 'scheduled'

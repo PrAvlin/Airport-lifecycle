@@ -1,4 +1,4 @@
-export type BoardingMethod = 'jet_bridge' | 'shuttle_bus' | 'walk_to_aircraft';
+export type BoardingMethod = 'aerobridge' | 'shuttle_bus';
 
 export type FlightStatus =
   | 'scheduled'
@@ -48,7 +48,7 @@ export interface MethodEstimate {
   confidenceLevel: MethodConfidenceLevel;
   /** Human-readable reasons behind the estimate, most significant first. */
   reasoning: string[];
-  /** Crowd reports tallied so far for this exact flight, e.g. { jet_bridge: 2 }. */
+  /** Crowd reports tallied so far for this exact flight, e.g. { aerobridge: 2 }. */
   reportCounts: Partial<Record<BoardingMethod, number>>;
   /** How many more matching reports on the leading method would lock in 'confirmed'. 0 if already confirmed. */
   reportsToConfirm: number;

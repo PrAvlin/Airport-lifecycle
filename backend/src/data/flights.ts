@@ -78,21 +78,9 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
   const id = `${airport.iata}_${flightNumber}_${estimatedDeparture}`;
 
   // Demo mode has no real aircraft-rotation data to reason from, so isQuickTurn is always false here.
-  const boarding = estimateAndRegister(
-    id,
-    'board',
-    boardingInputs(airport, terminal, gate),
-    false,
-    `board:${airport.iata}:${terminal}:${gate}:${flightNumber}`,
-  );
+  const boarding = estimateAndRegister(id, 'board', boardingInputs(airport, terminal, gate), false);
 
-  const disembark = estimateAndRegister(
-    id,
-    'deplane',
-    disembarkInputs(destination, arrivalTerminal, arrivalGate),
-    false,
-    `deplane:${destination}:${arrivalTerminal}:${flightNumber}`,
-  );
+  const disembark = estimateAndRegister(id, 'deplane', disembarkInputs(destination, arrivalTerminal, arrivalGate), false);
 
   const flight: FlightState = {
     id,

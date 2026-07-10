@@ -141,20 +141,13 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
   const arrivalScheduledUtc = raw.arrival?.scheduledTime?.utc ?? estimatedDeparture;
   const arrivalEstimatedUtc = raw.arrival?.revisedTime?.utc ?? arrivalScheduledUtc;
 
-  const boarding = estimateAndRegister(
-    id,
-    'board',
-    boardingInputs(airport, terminal, gate),
-    isQuickTurn,
-    `board:${airport.iata}:${terminal}:${gate}:${flightNumber}`,
-  );
+  const boarding = estimateAndRegister(id, 'board', boardingInputs(airport, terminal, gate), isQuickTurn);
 
   const disembark = estimateAndRegister(
     id,
     'deplane',
     disembarkInputs(destinationIata, arrivalTerminal, arrivalGate),
     isQuickTurn,
-    `deplane:${destinationIata}:${arrivalTerminal}:${flightNumber}`,
   );
 
   return {

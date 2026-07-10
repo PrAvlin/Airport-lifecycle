@@ -13,13 +13,13 @@ const DISEMBARK_MINUTES = 10;
 
 /**
  * Summarizes a method estimate for the timeline in one line, honestly
- * reflecting how sure we actually are - never stating "jet bridge" or
+ * reflecting how sure we actually are - never stating "aerobridge" or
  * "shuttle bus" as if it were fact unless it's confirmed or a strong
  * enough signal to call "likely."
  */
 function summarizeMethodEstimate(estimate: MethodEstimate, labelFn: (m: FlightState['boarding']['method']) => string): string {
   if (estimate.confidenceLevel === 'uncertain') {
-    return 'Not yet known whether this is a jet bridge, a shuttle bus, or a short walk — could be either. Come prepared for a bus just in case.';
+    return 'Not yet known whether this is an aerobridge or a shuttle bus — could be either. Come prepared for a bus just in case.';
   }
   const base = labelFn(estimate.method);
   if (estimate.confidenceLevel === 'confirmed') {
@@ -157,26 +157,18 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
 
 export function boardingMethodLabel(method: FlightState['boarding']['method']): string {
   switch (method) {
-    case 'jet_bridge':
-      return 'Boarding via jet bridge — walk directly from the gate to the aircraft door.';
+    case 'aerobridge':
+      return 'Boarding via aerobridge — walk directly from the gate to the aircraft door.';
     case 'shuttle_bus':
       return 'Boarding via shuttle bus — you will be bused to the aircraft on the tarmac.';
-    case 'walk_to_aircraft':
-      return 'Boarding on foot — a short walk across the apron to the aircraft.';
-    default:
-      return '';
   }
 }
 
 export function disembarkMethodLabel(method: FlightState['boarding']['method']): string {
   switch (method) {
-    case 'jet_bridge':
-      return 'Deplaning via jet bridge — walk directly off into the terminal.';
+    case 'aerobridge':
+      return 'Deplaning via aerobridge — walk directly off into the terminal.';
     case 'shuttle_bus':
       return 'Deplaning onto a shuttle bus — you will be bused from the aircraft to the terminal.';
-    case 'walk_to_aircraft':
-      return 'Deplaning on foot — a short walk across the apron into the terminal.';
-    default:
-      return '';
   }
 }

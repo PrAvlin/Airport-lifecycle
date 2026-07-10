@@ -60,8 +60,8 @@ export const ORIGIN_AIRPORTS: Record<string, OriginAirport> = {
     defaultTerminal: 'T1',
     gateRules: [
       { terminal: 'T1', gates: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level gate at T1 — ground-floor gates board by bus across the apron' },
-      { terminal: 'T1', gates: ['10', '11', '12', '13', '14', '15', '16', '17', '18'], method: 'jet_bridge', probability: 0.93, note: 'is an upper-level contact gate at T1 — these connect straight to an aerobridge' },
-      { terminal: 'T2', gates: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31'], method: 'jet_bridge', probability: 0.95, note: 'is an upper-level contact gate at T2 — aerobridge boarding' },
+      { terminal: 'T1', gates: ['10', '11', '12', '13', '14', '15', '16', '17', '18'], method: 'aerobridge', probability: 0.93, note: 'is an upper-level contact gate at T1 — these connect straight to an aerobridge' },
+      { terminal: 'T2', gates: ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31'], method: 'aerobridge', probability: 0.95, note: 'is an upper-level contact gate at T2 — aerobridge boarding' },
       { terminal: 'T2', gates: ['40', '41', '42', '43'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level bus gate at T2' },
     ],
     localities: [
@@ -90,9 +90,9 @@ export const ORIGIN_AIRPORTS: Record<string, OriginAirport> = {
     },
     defaultTerminal: 'T1',
     gateRules: [
-      { terminal: 'T1', gates: ['1', '2', '3', '4', '5', '6'], method: 'jet_bridge', probability: 0.92, note: 'is an upper-level contact gate at Chennai T1 — aerobridge boarding' },
+      { terminal: 'T1', gates: ['1', '2', '3', '4', '5', '6'], method: 'aerobridge', probability: 0.92, note: 'is an upper-level contact gate at Chennai T1 — aerobridge boarding' },
       { terminal: 'T1', gates: ['7', '8', '9', '10'], method: 'shuttle_bus', probability: 0.9, note: 'is a ground-level gate at Chennai T1 — ground-floor gates board by bus' },
-      { terminal: 'T2', gates: ['11', '12', '13', '14', '15', '16', '17'], method: 'jet_bridge', probability: 0.93, note: 'is an upper-level contact gate at Chennai T2 — aerobridge boarding' },
+      { terminal: 'T2', gates: ['11', '12', '13', '14', '15', '16', '17'], method: 'aerobridge', probability: 0.93, note: 'is an upper-level contact gate at Chennai T2 — aerobridge boarding' },
       { terminal: 'T2', gates: ['18', '19', '20'], method: 'shuttle_bus', probability: 0.88, note: 'is a ground-level bus gate at Chennai T2' },
     ],
     localities: [
@@ -114,12 +114,12 @@ export const ORIGIN_AIRPORTS: Record<string, OriginAirport> = {
     longitude: 77.0436,
     timezone: 'Asia/Kolkata',
     terminals: {
-      T1: { aerobridgeShare: 0.5, reason: 'Coimbatore has only two aerobridges; other stands are a short walk or bus ride across the apron.' },
+      T1: { aerobridgeShare: 0.5, reason: 'Coimbatore has only two aerobridges; other stands are reached by shuttle bus across the apron.' },
     },
     defaultTerminal: 'T1',
     gateRules: [
-      { terminal: 'T1', gates: ['1', '2'], method: 'jet_bridge', probability: 0.9, note: 'is one of Coimbatore’s two aerobridge gates' },
-      { terminal: 'T1', gates: ['3', '4'], method: 'walk_to_aircraft', probability: 0.85, note: 'is a ground-level gate at Coimbatore — usually a short walk across the apron' },
+      { terminal: 'T1', gates: ['1', '2'], method: 'aerobridge', probability: 0.9, note: 'is one of Coimbatore’s two aerobridge gates' },
+      { terminal: 'T1', gates: ['3', '4'], method: 'shuttle_bus', probability: 0.85, note: 'is a ground-level gate at Coimbatore — boards by shuttle bus across the apron' },
     ],
     localities: [
       { id: 'gandhipuram', name: 'Gandhipuram', latitude: 11.0183, longitude: 76.9725, typicalMinutesNoTraffic: 30 },

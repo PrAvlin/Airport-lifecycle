@@ -32,13 +32,7 @@ function tickFlight(flight: FlightState, emit: EventEmitter): void {
     if (newGate && newGate !== flight.gate) {
       // The gate drives the boarding-method confidence, so a gate change
       // must recompute the estimate rather than leave the old one stale.
-      const boarding = estimateAndRegister(
-        flight.id,
-        'board',
-        boardingInputs(airport, flight.terminal, newGate),
-        false,
-        `board:${airport.iata}:${flight.terminal}:${newGate}:${flight.flightNumber}`,
-      );
+      const boarding = estimateAndRegister(flight.id, 'board', boardingInputs(airport, flight.terminal, newGate), false);
       const updated = patchDemoFlight(flight.origin, flight.flightNumber, { gate: newGate, boarding });
       if (updated) emitUpdate(emit, 'gate_change', updated, `Gate changed to ${newGate} for ${flight.flightNumber}`);
       return;

@@ -21,6 +21,14 @@ interface EstimateInputs {
   /** Prior probability that boarding/deplaning is via aerobridge, before quick-turn and crowd signals. */
   baseAerobridgeProb: number;
   baseReasons: string[];
+  /**
+   * True when baseAerobridgeProb came from a matched physical-layout gate
+   * rule (a hard fact - a ground-level gate cannot have an aerobridge,
+   * no matter what) rather than a statistical terminal-wide average. The
+   * quick-turn heuristic below must never override a hard physical fact
+   * with a mere statistical inference.
+   */
+  isGateConfirmed: boolean;
   isQuickTurn: boolean;
 }
 
@@ -38,10 +46,11 @@ export function boardingInputs(airport: OriginAirport, terminal: string, gate: s
     return {
       baseAerobridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
       baseReasons: [`Gate ${gate} ${gateRule.note}.`],
+      isGateConfirmed: true,
     };
   }
   const profile = getTerminalProfile(airport, terminal);
-  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason] };
+  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason], isGateConfirmed: false };
 }
 
 /**
@@ -64,6 +73,7 @@ export function disembarkInputs(
       return {
         baseAerobridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
         baseReasons: [`Arrival gate ${arrivalGate} ${gateRule.note}.`],
+        isGateConfirmed: true,
       };
     }
   }
@@ -75,7 +85,7 @@ export function disembarkInputs(
       : profile.aerobridgeShare <= 0.5
         ? `${profile.name} regularly uses remote stands reached by shuttle bus.`
         : `${profile.name} uses a mix of aerobridge and remote stands.`;
-  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [reason] };
+  return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [reason], isGateConfirmed: false };
 }
 
 /**
@@ -111,7 +121,10 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: EstimateI
   let aerobridgeProb = ctx.baseAerobridgeProb;
   const reasoning = [...ctx.baseReasons];
 
-  if (ctx.isQuickTurn) {
+  // A matched gate rule is a hard physical fact (a ground-level gate cannot
+  // have an aerobridge) - the quick-turn heuristic only applies when we're
+  // relying on a statistical terminal-wide average instead of that fact.
+  if (ctx.isQuickTurn && !ctx.isGateConfirmed) {
     if (aerobridgeProb < QUICK_TURN_AEROBRIDGE_PROB) {
       aerobridgeProb = QUICK_TURN_AEROBRIDGE_PROB;
     }

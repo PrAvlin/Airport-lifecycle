@@ -5,7 +5,7 @@ import { colors } from '../theme';
 
 const CONFIG: Record<BoardingMethod, { icon: string; label: string }> = {
   aerobridge: { icon: '🌉', label: 'Aerobridge' },
-  shuttle_bus: { icon: '🚌', label: 'Shuttle Bus' },
+  shuttle_bus: { icon: '🚌', label: 'Shuttle' },
 };
 
 export function BoardingMethodBadge({ method }: { method: BoardingMethod }) {

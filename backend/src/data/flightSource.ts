@@ -178,7 +178,8 @@ export function reportBoardingMethod(
   const flight = getFlightByNumber(flightNumber, originIata);
   if (!flight) return undefined;
 
-  submitReport(flight.id, phase, method);
+  const relevantAirport = phase === 'board' ? flight.origin : flight.destination;
+  submitReport(flight.id, phase, method, relevantAirport);
   const nextEstimate = recomputeEstimate(flight.id, phase);
   if (!nextEstimate) return flight;
 

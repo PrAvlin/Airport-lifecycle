@@ -382,7 +382,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 90,
     terminals: {
-      T1: { aerobridgeShare: 0.4, reason: 'A smaller terminal that relies mostly on remote stands reached by bus.' },
+      T1: { aerobridgeShare: 0.43, reason: '6 contact gates against 8 remote parking stands — a near-even split, slightly bus-favored.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -420,7 +420,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 145,
     terminals: {
-      T1: { aerobridgeShare: 0.7, reason: 'A newer terminal, mostly aerobridge-served.' },
+      T1: { aerobridgeShare: 0.5, reason: 'T1 has just 4 aerobridges (6 more planned for the upcoming T3 expansion) — call it a coin flip today.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -439,7 +439,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 100,
     terminals: {
-      T2: { aerobridgeShare: 0.45, reason: 'A mix of aerobridge and remote stands.' },
+      T2: { aerobridgeShare: 0.45, reason: '5 aerobridges among 11 gates total (8 on the upper floor, 3 on the ground floor, which can never be aerobridge).' },
     },
     defaultTerminal: 'T2',
     gateRules: [],
@@ -458,7 +458,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 110,
     terminals: {
-      T1: { aerobridgeShare: 0.4, reason: 'Mostly remote stands reached by bus, with a few aerobridge gates.' },
+      T1: { aerobridgeShare: 0.25, reason: 'Only 2 aerobridges serve the terminal — most gates are reached on foot or by shuttle across the apron.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -477,7 +477,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 165,
     terminals: {
-      T1: { aerobridgeShare: 0.5, reason: 'A mix of aerobridge and ground-level bus gates.' },
+      T1: { aerobridgeShare: 0.7, reason: 'The brand-new T2 terminal ("The Bamboo Orchids", opened 2026) has 10 aerobridges, a big step up from the older terminal passengers described as short on bridges.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],

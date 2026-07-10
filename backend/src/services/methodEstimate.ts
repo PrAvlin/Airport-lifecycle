@@ -1,10 +1,14 @@
 import { findGateRule, getOriginAirport, getTerminalProfile, isKnownOrigin, OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
-import { getReportCounts, ReportPhase } from './boardingReports';
+import { getAirportReportCounts, getReportCounts, ReportPhase } from './boardingReports';
 import { BoardingMethod, MethodConfidenceLevel, MethodEstimate } from '../types';
 
 const LOCK_THRESHOLD = 3;
 const LIKELY_THRESHOLD = 0.75;
+// Below this many cumulative reports for an airport, the sample is too small
+// to trust over the curated/generic base rate - avoids one early report
+// swinging every future estimate for that airport.
+const MIN_CONSENSUS_SAMPLE = 5;
 
 function methodLabel(method: BoardingMethod): string {
   switch (method) {
@@ -22,11 +26,39 @@ interface EstimateInputs {
 }
 
 /**
+ * Cross-flight, cross-day passenger consensus for a whole airport+phase -
+ * "of the last N reports for this airport, most said shuttle" - a real
+ * historical signal that beats a blind terminal-wide guess once enough
+ * reports have accumulated, even for airports we have no curated data for
+ * at all. Returns undefined below the minimum sample size.
+ */
+function consensusInputs(airportIata: string, phase: ReportPhase): EstimateInputs | undefined {
+  const counts = getAirportReportCounts(airportIata, phase);
+  const total = Object.values(counts).reduce((sum: number, c) => sum + (c ?? 0), 0);
+  if (total < MIN_CONSENSUS_SAMPLE) return undefined;
+
+  const aerobridgeCount = counts.aerobridge ?? 0;
+  const shuttleCount = counts.shuttle_bus ?? 0;
+  const leadingMethod: BoardingMethod = aerobridgeCount >= shuttleCount ? 'aerobridge' : 'shuttle_bus';
+  const leadingCount = Math.max(aerobridgeCount, shuttleCount);
+  const leadingPct = Math.round((leadingCount / total) * 100);
+
+  return {
+    baseAerobridgeProb: aerobridgeCount / total,
+    baseReasons: [
+      `${total} passenger reports at this airport so far — ${leadingCount} of them (${leadingPct}%) said ${methodLabel(leadingMethod)}.`,
+    ],
+  };
+}
+
+/**
  * Builds the boarding-side inputs for a flight at one of our origin
  * airports. Gate-level knowledge dominates when the gate is known: a
  * ground-level gate physically cannot have an aerobridge, and an
  * upper-level gate almost always does — so a matched gate rule replaces the
- * terminal-wide base rate instead of averaging with it.
+ * terminal-wide base rate instead of averaging with it. Next best is
+ * accumulated passenger consensus for this airport; only then the
+ * terminal-wide (curated or generic) base rate.
  */
 export function boardingInputs(airport: OriginAirport, terminal: string, gate: string): EstimateInputs {
   const gateRule = gate !== 'TBD' ? findGateRule(airport, terminal, gate) : undefined;
@@ -37,6 +69,9 @@ export function boardingInputs(airport: OriginAirport, terminal: string, gate: s
       baseReasons: [`Gate ${gate} ${gateRule.note}.`],
     };
   }
+  const consensus = consensusInputs(airport.iata, 'board');
+  if (consensus) return consensus;
+
   const profile = getTerminalProfile(airport, terminal);
   return { baseAerobridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason] };
 }
@@ -67,7 +102,11 @@ export function quickTurnInputs(airport: OriginAirport, arrivalTerminal: string,
  * Builds the deplaning-side inputs. If the destination happens to be one of
  * our own origin airports and its arrival gate is already known, the same
  * gate-level physical-layout knowledge used for boarding applies here too
- * and dominates over the airport-wide profile.
+ * and dominates over the airport-wide profile. Next best is accumulated
+ * passenger consensus for that destination - this is what lets even an
+ * airport we've never curated (a small regional strip, say) get a real,
+ * concrete answer once enough passengers have reported on it, instead of
+ * a permanent coin-flip.
  */
 export function disembarkInputs(
   destinationIata: string,
@@ -86,6 +125,9 @@ export function disembarkInputs(
       };
     }
   }
+
+  const consensus = consensusInputs(destinationIata, 'deplane');
+  if (consensus) return consensus;
 
   const profile = getDestinationProfile(destinationIata);
   const reason =

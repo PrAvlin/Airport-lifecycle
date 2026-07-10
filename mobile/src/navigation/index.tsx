@@ -6,7 +6,7 @@ import { colors } from '../theme';
 
 export type RootStackParamList = {
   Search: undefined;
-  Journey: { flightNumber: string };
+  Journey: { flightNumber: string; airport: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

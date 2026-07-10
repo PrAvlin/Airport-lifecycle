@@ -6,43 +6,51 @@ import { recomputeEstimate } from '../services/methodEstimate';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
+// Keyed by `${originIata}:${flightNumber}` — the same flight number can exist
+// out of two different airports on the same day.
 const store = new Map<string, FlightState>();
 let currentDataSource: DataSource = config.aerodatabox.enabled ? 'live' : 'demo';
 let lastError: string | null = null;
 let lastFetchedAt: string | null = null;
 let broadcastEmitter: EventEmitter | null = null;
 
+function storeKey(origin: string, flightNumber: string): string {
+  return `${origin.toUpperCase()}:${flightNumber.toUpperCase()}`;
+}
+
 /** Set once at server startup so parts of the app outside the poll loop (e.g. the reports route) can emit socket events too. */
 export function setBroadcastEmitter(emit: EventEmitter): void {
   broadcastEmitter = emit;
-}
-
-export function getDataSource(): DataSource {
-  return currentDataSource;
 }
 
 export function getSourceMeta() {
   return { dataSource: currentDataSource, lastError, lastFetchedAt };
 }
 
-export function listFlights(): FlightState[] {
-  return Array.from(store.values());
+export function listFlights(originIata?: string): FlightState[] {
+  const all = Array.from(store.values());
+  if (!originIata) return all;
+  const origin = originIata.toUpperCase();
+  return all.filter((f) => f.origin === origin);
 }
 
-export function getFlightByNumber(flightNumber: string): FlightState | undefined {
-  return store.get(flightNumber.toUpperCase());
+export function getFlightByNumber(flightNumber: string, originIata?: string): FlightState | undefined {
+  if (originIata) return store.get(storeKey(originIata, flightNumber));
+  // No airport given (e.g. a socket subscribe by flight number alone): first match wins.
+  const upper = flightNumber.toUpperCase();
+  return Array.from(store.values()).find((f) => f.flightNumber === upper);
 }
 
 export function seedDemoMode(): void {
   currentDataSource = 'demo';
   store.clear();
-  for (const flight of seedDemoFlights(8)) {
-    store.set(flight.flightNumber, flight);
+  for (const flight of seedDemoFlights()) {
+    store.set(storeKey(flight.origin, flight.flightNumber), flight);
   }
 }
 
-export function patchDemoFlight(flightNumber: string, patch: Partial<FlightState>): FlightState | undefined {
-  const key = flightNumber.toUpperCase();
+export function patchDemoFlight(origin: string, flightNumber: string, patch: Partial<FlightState>): FlightState | undefined {
+  const key = storeKey(origin, flightNumber);
   const existing = store.get(key);
   if (!existing) return undefined;
   const updated: FlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
@@ -59,21 +67,21 @@ function formatTime(iso: string): string {
 }
 
 /**
- * Merges a freshly-fetched live snapshot into the store, diffing against the
- * previous state per flight so the same gate/boarding-confidence/status/
- * delay notifications used in demo mode fire for real changes too. Each
- * fetched flight already carries a freshly-computed boarding/disembark
- * estimate (built from current crowd report tallies), so no separate
- * overlay step is needed here.
+ * Merges a freshly-fetched live snapshot for ONE origin airport into the
+ * store, diffing against the previous state per flight so gate/confidence/
+ * status/delay notifications fire for real changes. Flights of other origin
+ * airports are left untouched.
  */
-export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): void {
+export function applyLiveSnapshot(originIata: string, flights: FlightState[], emit?: EventEmitter): void {
   currentDataSource = 'live';
   lastError = null;
   lastFetchedAt = new Date().toISOString();
+  const origin = originIata.toUpperCase();
 
   for (const nextFlight of flights) {
-    const previous = store.get(nextFlight.flightNumber);
-    store.set(nextFlight.flightNumber, nextFlight);
+    const key = storeKey(origin, nextFlight.flightNumber);
+    const previous = store.get(key);
+    store.set(key, nextFlight);
 
     if (!previous || !emit) continue;
 
@@ -97,9 +105,9 @@ export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): 
     }
   }
 
-  const freshNumbers = new Set(flights.map((f) => f.flightNumber));
+  const freshKeys = new Set(flights.map((f) => storeKey(origin, f.flightNumber)));
   for (const key of Array.from(store.keys())) {
-    if (!freshNumbers.has(key)) store.delete(key);
+    if (key.startsWith(`${origin}:`) && !freshKeys.has(key)) store.delete(key);
   }
 }
 
@@ -117,8 +125,9 @@ export function reportBoardingMethod(
   flightNumber: string,
   phase: ReportPhase,
   method: Parameters<typeof submitReport>[2],
+  originIata?: string,
 ): FlightState | undefined {
-  const flight = getFlightByNumber(flightNumber);
+  const flight = getFlightByNumber(flightNumber, originIata);
   if (!flight) return undefined;
 
   submitReport(flight.id, phase, method);
@@ -131,7 +140,7 @@ export function reportBoardingMethod(
       ? { ...flight, boarding: nextEstimate, lastUpdated: new Date().toISOString() }
       : { ...flight, arrival: { ...flight.arrival, disembark: nextEstimate }, lastUpdated: new Date().toISOString() };
 
-  store.set(flight.flightNumber, updated);
+  store.set(storeKey(flight.origin, flight.flightNumber), updated);
 
   if (broadcastEmitter && previousEstimate.confidenceLevel !== nextEstimate.confidenceLevel) {
     const label = phase === 'board' ? 'Boarding' : 'Deplaning';

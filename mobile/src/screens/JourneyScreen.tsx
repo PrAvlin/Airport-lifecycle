@@ -22,10 +22,10 @@ function formatStatus(status: string): string {
 }
 
 export function JourneyScreen({ route }: Props) {
-  const { flightNumber } = route.params;
-  const { flight, loading, error, lastEvent } = useFlightStatus(flightNumber);
+  const { flightNumber, airport } = route.params;
+  const { flight, loading, error, lastEvent } = useFlightStatus(flightNumber, airport);
   const stages = useJourneyStages(flight);
-  const traffic = useTraffic();
+  const traffic = useTraffic(airport);
 
   if (loading && !flight) {
     return (
@@ -93,6 +93,7 @@ export function JourneyScreen({ route }: Props) {
         title="How you'll board"
         estimate={flight.boarding}
         flightNumber={flight.flightNumber}
+        airport={airport}
         phase="board"
       />
 
@@ -110,6 +111,7 @@ export function JourneyScreen({ route }: Props) {
         title="How you'll get off the plane"
         estimate={flight.arrival.disembark}
         flightNumber={flight.flightNumber}
+        airport={airport}
         phase="deplane"
       />
 

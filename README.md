@@ -1,6 +1,6 @@
-# BLR Airport Lifecycle
+# Airport Lifecycle (BLR · MAA · CJB)
 
-A mobile app scoped to **Kempegowda International Airport (BLR), Bangalore**
+A mobile app for **Bengaluru (BLR), Chennai (MAA), and Coimbatore (CJB)**
 that walks a passenger through their full door-to-door journey — traffic to
 the airport, terminal entry, security, boarding, the flight itself, touchdown,
 deplaning, immigration & customs, baggage claim, and exit to the arrival
@@ -20,8 +20,8 @@ mobile/    Expo (React Native + TypeScript) app consuming that API.
 
 | Data | Source | Free tier | Notes |
 |---|---|---|---|
-| BLR flight schedule/status/delay/terminal | [AeroDataBox](https://rapidapi.com/aedbx-aedbx/api/aerodatabox) via RapidAPI | ~100 requests/month | Gate is only occasionally returned for BLR; terminal and timing are reliable. |
-| Live drive-time traffic to BLR | [TomTom Routing API](https://developer.tomtom.com/routing-api) | 2,500 requests/day | Used from a set of Bangalore locality presets to the airport's coordinates. |
+| Flight schedule/status/delay/terminal/gate | [AeroDataBox](https://rapidapi.com/aedbx-aedbx/api/aerodatabox) via RapidAPI | ~100 requests/month | Polled once per origin airport per cycle — three airports triples quota use, so keep the poll interval conservative. |
+| Live drive-time traffic to each airport | [TomTom Routing API](https://developer.tomtom.com/routing-api) | 2,500 requests/day | Used from per-city locality presets (Bengaluru, Chennai, Coimbatore) to each airport's coordinates. |
 
 **What's not available from any free API, for any airport:** whether a
 specific flight boards or deplanes via jet bridge vs. shuttle bus, and live
@@ -33,11 +33,20 @@ than an honest "we don't know yet," since it leaves a passenger unprepared
 for a bus or a walk across the tarmac. Instead it computes a real confidence
 level from three inputs and is upfront about which one it's using:
 
-- **Terminal/airport-layout base rate.** BLR's T2 (opened 2022) is almost
-  entirely aerobridge-served; T1 mixes aerobridge gates with bused remote
-  stands. Deplaning at the destination uses a small curated profile per
-  airport BLR actually flies to (LHR, DXB, SIN, DEL, BOM, HYD, MAA, PNQ),
-  with a generic fallback for anything else.
+- **Gate-level knowledge (strongest signal).** The physical layout gives it
+  away: a ground-level gate cannot have an aerobridge, while an upper-level
+  gate almost always does. Each supported origin airport carries a curated
+  gate map (`backend/src/data/airports.ts`) — e.g. BLR T1 gates 1–9 are
+  ground-level bus gates while 10–18 are upper-level contact gates; Chennai
+  T1 gates 7–10 are ground-level; Coimbatore has exactly two aerobridge
+  gates. When the gate is known, this rule replaces the terminal-wide
+  average at ~0.9–0.95 probability. Gate maps are curated approximations,
+  corrected by crowd reports when wrong.
+- **Terminal/airport-layout base rate** (when the gate isn't out yet).
+  BLR's T2 is almost entirely aerobridge-served while T1 is mixed; Chennai's
+  T1/T2 and Coimbatore have their own profiles. Deplaning at the destination
+  uses a curated per-airport profile (LHR, DXB, SIN, DEL, BOM, HYD, MAA,
+  PNQ, BLR, CJB), with a generic fallback for anything else.
 - **Aircraft-rotation signal.** AeroDataBox reports each flight's aircraft
   registration and real scheduled times. If the same airframe that just
   landed at BLR is scheduled to depart again within ~90 minutes, that's a
@@ -100,11 +109,12 @@ Environment variables (all optional — omit to run in demo mode):
 
 Endpoints:
 - `GET /health` — status + whether live flights/traffic are configured
-- `GET /flights` — today's BLR departures (live or demo) + `meta.dataSource`
-- `GET /flights/:flightNumber` — a single flight's current state (departure + arrival/deplaning info)
-- `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'jet_bridge'|'shuttle_bus'|'walk_to_aircraft' }`; submits a passenger's crowdsourced report
-- `GET /traffic/localities` — preset Bangalore localities
-- `GET /traffic/:localityId` — live (or static) drive time from that locality to BLR
+- `GET /airports` — supported origin airports (BLR, MAA, CJB)
+- `GET /flights?airport=MAA` — today's departures for that airport (live or demo) + `meta.dataSource`
+- `GET /flights/:flightNumber?airport=MAA` — a single flight's current state (departure + arrival/deplaning info)
+- `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'jet_bridge'|'shuttle_bus'|'walk_to_aircraft', airport?: 'MAA' }`; submits a passenger's crowdsourced report
+- `GET /traffic/:airport/localities` — preset localities for that city
+- `GET /traffic/:airport/:localityId` — live (or static) drive time from that locality to the airport
 - Socket.IO: emit `subscribe`/`unsubscribe` with a flight number; listen for `flight:snapshot` and `flight:update`
 
 ## Running the mobile app

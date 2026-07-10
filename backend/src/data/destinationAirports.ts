@@ -14,6 +14,8 @@ export interface DestinationProfile {
  * data - always surfaced as "estimated" in the UI, never as confirmed.
  */
 export const DESTINATION_PROFILES: Record<string, DestinationProfile> = {
+  BLR: { name: 'Kempegowda International Airport', timezone: 'Asia/Kolkata', aerobridgeShare: 0.7, typicalFlightMinutes: 55 },
+  CJB: { name: 'Coimbatore International Airport', timezone: 'Asia/Kolkata', aerobridgeShare: 0.5, typicalFlightMinutes: 55 },
   BOM: { name: 'Chhatrapati Shivaji Maharaj International Airport', timezone: 'Asia/Kolkata', aerobridgeShare: 0.75, typicalFlightMinutes: 95 },
   DEL: { name: 'Indira Gandhi International Airport', timezone: 'Asia/Kolkata', aerobridgeShare: 0.8, typicalFlightMinutes: 160 },
   HYD: { name: 'Rajiv Gandhi International Airport', timezone: 'Asia/Kolkata', aerobridgeShare: 0.85, typicalFlightMinutes: 60 },

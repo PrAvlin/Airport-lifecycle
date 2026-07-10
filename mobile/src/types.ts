@@ -106,6 +106,13 @@ export interface Locality {
   name: string;
 }
 
+export interface AirportSummary {
+  iata: string;
+  name: string;
+  city: string;
+  terminals: string[];
+}
+
 export interface TrafficEstimate {
   localityId: string;
   localityName: string;

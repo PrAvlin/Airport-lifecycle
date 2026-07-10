@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
 import { seedDemoMode, setBroadcastEmitter } from './data/flightSource';
+import { airportsRouter } from './routes/airports';
 import { flightsRouter } from './routes/flights';
 import { trafficRouter } from './routes/traffic';
 import { startDemoSimulation } from './polling/demoSimulator';
@@ -23,6 +24,7 @@ app.get('/health', (_req, res) => {
   });
 });
 
+app.use('/airports', airportsRouter);
 app.use('/flights', flightsRouter);
 app.use('/traffic', trafficRouter);
 
@@ -40,10 +42,10 @@ const emit = (event: Parameters<typeof broadcastFlightUpdate>[1]) => {
 setBroadcastEmitter(emit);
 
 if (config.aerodatabox.enabled) {
-  console.log('AERODATABOX_API_KEY found — polling live BLR departures.');
+  console.log('AERODATABOX_API_KEY found — polling live BLR/MAA/CJB departures.');
   startLivePolling(emit);
 } else {
-  console.log('AERODATABOX_API_KEY not set — running in DEMO mode with simulated BLR flights.');
+  console.log('AERODATABOX_API_KEY not set — running in DEMO mode with simulated BLR/MAA/CJB flights.');
   seedDemoMode();
   startDemoSimulation(emit);
 }
@@ -53,5 +55,5 @@ if (!config.tomtom.enabled) {
 }
 
 httpServer.listen(config.port, () => {
-  console.log(`Airport lifecycle backend (BLR) listening on http://localhost:${config.port}`);
+  console.log(`Airport lifecycle backend (BLR·MAA·CJB) listening on http://localhost:${config.port}`);
 });

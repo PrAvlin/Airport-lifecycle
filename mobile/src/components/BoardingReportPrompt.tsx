@@ -6,6 +6,7 @@ import { colors } from '../theme';
 
 interface Props {
   flightNumber: string;
+  airport: string;
   phase: 'board' | 'deplane';
 }
 
@@ -15,7 +16,7 @@ const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
   { method: 'walk_to_aircraft', label: 'Walk', icon: '🚶' },
 ];
 
-export function BoardingReportPrompt({ flightNumber, phase }: Props) {
+export function BoardingReportPrompt({ flightNumber, airport, phase }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,7 +26,7 @@ export function BoardingReportPrompt({ flightNumber, phase }: Props) {
       await fetch(`${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase, method }),
+        body: JSON.stringify({ phase, method, airport }),
       });
       setSubmitted(true);
     } catch {

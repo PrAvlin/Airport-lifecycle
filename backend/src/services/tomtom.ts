@@ -1,6 +1,5 @@
 import { config } from '../config';
-import { BLR_AIRPORT } from '../data/airport';
-import { Locality } from '../data/localities';
+import { Locality, OriginAirport } from '../data/airports';
 import { TrafficEstimate } from '../types';
 
 interface TomTomRouteSummary {
@@ -13,13 +12,13 @@ interface TomTomResponse {
   routes?: { summary: TomTomRouteSummary }[];
 }
 
-export async function fetchLiveTrafficToAirport(locality: Locality): Promise<TrafficEstimate> {
+export async function fetchLiveTrafficToAirport(locality: Locality, airport: OriginAirport): Promise<TrafficEstimate> {
   if (!config.tomtom.enabled) {
     throw new Error('TOMTOM_API_KEY is not configured');
   }
 
   const origin = `${locality.latitude},${locality.longitude}`;
-  const destination = `${BLR_AIRPORT.latitude},${BLR_AIRPORT.longitude}`;
+  const destination = `${airport.latitude},${airport.longitude}`;
   const url =
     `https://api.tomtom.com/routing/1/calculateRoute/${origin}:${destination}/json` +
     `?key=${config.tomtom.apiKey}&traffic=true&travelMode=car&computeTravelTimeFor=all`;
@@ -59,8 +58,8 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function estimateStaticTraffic(locality: Locality): TrafficEstimate {
-  const distanceKm = haversineKm(locality.latitude, locality.longitude, BLR_AIRPORT.latitude, BLR_AIRPORT.longitude);
+export function estimateStaticTraffic(locality: Locality, airport: OriginAirport): TrafficEstimate {
+  const distanceKm = haversineKm(locality.latitude, locality.longitude, airport.latitude, airport.longitude);
   return {
     localityId: locality.id,
     localityName: locality.name,

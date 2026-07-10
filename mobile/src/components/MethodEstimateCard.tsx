@@ -9,6 +9,7 @@ interface Props {
   title: string;
   estimate: MethodEstimate;
   flightNumber: string;
+  airport: string;
   phase: 'board' | 'deplane';
 }
 
@@ -19,7 +20,7 @@ interface Props {
  * and a way to help resolve it, because a wrong confident answer is worse
  * than an honest "we don't know yet."
  */
-export function MethodEstimateCard({ title, estimate, flightNumber, phase }: Props) {
+export function MethodEstimateCard({ title, estimate, flightNumber, airport, phase }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -39,7 +40,7 @@ export function MethodEstimateCard({ title, estimate, flightNumber, phase }: Pro
           <Text style={styles.likelyNote}>
             ~{Math.round(estimate.probability * 100)}% likely, not yet confirmed — {estimate.reasoning[0]}
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} phase={phase} />
+          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} />
         </>
       )}
 
@@ -55,7 +56,7 @@ export function MethodEstimateCard({ title, estimate, flightNumber, phase }: Pro
             Come prepared for a bus: wear comfortable shoes, keep essentials within reach, and budget a few extra
             minutes just in case.
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} phase={phase} />
+          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} />
         </View>
       )}
     </View>

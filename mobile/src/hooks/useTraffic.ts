@@ -4,20 +4,20 @@ import { Locality, TrafficEstimate } from '../types';
 
 const REFRESH_MS = 3 * 60_000;
 
-export function useTraffic() {
+export function useTraffic(airport: string) {
   const [localities, setLocalities] = useState<Locality[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<TrafficEstimate | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchLocalities()
+    fetchLocalities(airport)
       .then((list) => {
         setLocalities(list);
         if (list.length > 0) setSelectedId(list[0].id);
       })
       .catch(() => setLocalities([]));
-  }, []);
+  }, [airport]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -25,7 +25,7 @@ export function useTraffic() {
 
     function load() {
       setLoading(true);
-      fetchTraffic(selectedId as string)
+      fetchTraffic(airport, selectedId as string)
         .then((data) => {
           if (!cancelled) setEstimate(data);
         })
@@ -43,7 +43,7 @@ export function useTraffic() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedId]);
+  }, [selectedId, airport]);
 
   return { localities, selectedId, setSelectedId, estimate, loading };
 }

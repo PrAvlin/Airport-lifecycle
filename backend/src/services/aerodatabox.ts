@@ -1,7 +1,7 @@
 import { config } from '../config';
-import { BLR_AIRPORT, BlrTerminal } from '../data/airport';
+import { OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
-import { boardingBaseShareAndReason, disembarkBaseShareAndReason, estimateAndRegister } from './methodEstimate';
+import { boardingInputs, disembarkInputs, estimateAndRegister } from './methodEstimate';
 import {
   estimateArrivalImmigrationWaitMinutes,
   estimateBaggageWaitMinutes,
@@ -61,9 +61,12 @@ const STATUS_MAP: Record<string, FlightStatus> = {
 // almost certainly parked it on a contact/aerobridge stand to make the turn.
 const QUICK_TURN_MAX_MINUTES = 90;
 
-function normalizeTerminal(raw: string | undefined): BlrTerminal {
-  if (raw && raw.includes('2')) return 'T2';
-  return 'T1';
+function normalizeTerminal(airport: OriginAirport, raw: string | undefined): string {
+  if (raw) {
+    const candidate = raw.startsWith('T') ? raw : `T${raw}`;
+    if (candidate in airport.terminals) return candidate;
+  }
+  return airport.defaultTerminal;
 }
 
 function normalizeFlightNumber(raw: string | undefined): string {
@@ -115,14 +118,14 @@ function findQuickTurnRegistrations(arrivals: AeroDataBoxFlight[], departures: A
   return quickTurnRegs;
 }
 
-function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): FlightState | null {
+function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airport: OriginAirport): FlightState | null {
   const departure = raw.departure;
   const scheduledUtc = departure?.scheduledTime?.utc;
   if (!departure || !scheduledUtc || raw.isCargo) return null;
 
   const flightNumber = normalizeFlightNumber(raw.number);
   const estimatedDeparture = departure.revisedTime?.utc ?? scheduledUtc;
-  const terminal = normalizeTerminal(departure.terminal);
+  const terminal = normalizeTerminal(airport, departure.terminal);
   const gate = departure.gate ?? 'TBD';
   const destinationIata = raw.arrival?.airport?.iata ?? 'N/A';
   const isInternational = (raw.arrival?.airport?.countryCode ?? 'IN') !== 'IN';
@@ -130,29 +133,25 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): Flig
   const boardingStartTime = new Date(new Date(estimatedDeparture).getTime() - boardingLeadMinutes * 60_000).toISOString();
   const now = new Date();
   const isQuickTurn = !!raw.aircraft?.reg && quickTurnRegs.has(raw.aircraft.reg);
-  const id = `${flightNumber}_${scheduledUtc}`;
+  const id = `${airport.iata}_${flightNumber}_${scheduledUtc}`;
 
   const destinationProfile = getDestinationProfile(destinationIata);
   const arrivalTerminal = raw.arrival?.terminal ?? 'TBD';
   const arrivalScheduledUtc = raw.arrival?.scheduledTime?.utc ?? estimatedDeparture;
   const arrivalEstimatedUtc = raw.arrival?.revisedTime?.utc ?? arrivalScheduledUtc;
 
-  const boardShareReason = boardingBaseShareAndReason(terminal);
   const boarding = estimateAndRegister(
     id,
     'board',
-    boardShareReason.share,
-    boardShareReason.reason,
+    boardingInputs(airport, terminal, gate),
     isQuickTurn,
-    `board:${terminal}:${gate}:${flightNumber}`,
+    `board:${airport.iata}:${terminal}:${gate}:${flightNumber}`,
   );
 
-  const deplaneShareReason = disembarkBaseShareAndReason(destinationIata);
   const disembark = estimateAndRegister(
     id,
     'deplane',
-    deplaneShareReason.share,
-    deplaneShareReason.reason,
+    disembarkInputs(destinationIata),
     isQuickTurn,
     `deplane:${destinationIata}:${arrivalTerminal}:${flightNumber}`,
   );
@@ -161,7 +160,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>): Flig
     id,
     flightNumber,
     airline: raw.airline?.name ?? 'Unknown Airline',
-    origin: BLR_AIRPORT.iata,
+    origin: airport.iata,
     destination: destinationIata,
     isInternational,
     scheduledDeparture: scheduledUtc,
@@ -206,7 +205,7 @@ function toLocalParam(date: Date): string {
   return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
 }
 
-export async function fetchLiveBlrDepartures(): Promise<FlightState[]> {
+export async function fetchLiveDepartures(airport: OriginAirport): Promise<FlightState[]> {
   if (!config.aerodatabox.enabled) {
     throw new Error('AERODATABOX_API_KEY is not configured');
   }
@@ -219,7 +218,7 @@ export async function fetchLiveBlrDepartures(): Promise<FlightState[]> {
   // extra quota cost), which is what lets us cross-reference aircraft
   // rotations for the quick-turn heuristic below.
   const url =
-    `https://${config.aerodatabox.host}/flights/airports/iata/${BLR_AIRPORT.iata}/${from}/${to}` +
+    `https://${config.aerodatabox.host}/flights/airports/iata/${airport.iata}/${from}/${to}` +
     `?withLeg=true&direction=Both&withCancelled=true&withCodeshared=false&withCargo=false&withPrivate=false&withLocation=false`;
 
   const res = await fetch(url, {
@@ -230,7 +229,7 @@ export async function fetchLiveBlrDepartures(): Promise<FlightState[]> {
   });
 
   if (!res.ok) {
-    throw new Error(`AeroDataBox request failed: ${res.status} ${res.statusText}`);
+    throw new Error(`AeroDataBox request failed for ${airport.iata}: ${res.status} ${res.statusText}`);
   }
 
   const body = (await res.json()) as AeroDataBoxResponse;
@@ -239,6 +238,6 @@ export async function fetchLiveBlrDepartures(): Promise<FlightState[]> {
   const quickTurnRegs = findQuickTurnRegistrations(arrivals, departures);
 
   return departures
-    .map((flight) => toFlightState(flight, quickTurnRegs))
+    .map((flight) => toFlightState(flight, quickTurnRegs, airport))
     .filter((f): f is FlightState => f !== null);
 }

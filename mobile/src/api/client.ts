@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { FlightState, Locality, TrafficEstimate } from '../types';
+import { AirportSummary, FlightState, Locality, TrafficEstimate } from '../types';
 
 function resolveApiBaseUrl(): string {
   const fromExtra = Constants.expoConfig?.extra?.apiBaseUrl as string | undefined;
@@ -8,8 +8,17 @@ function resolveApiBaseUrl(): string {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
-export async function fetchFlight(flightNumber: string): Promise<FlightState> {
-  const res = await fetch(`${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}`);
+export async function fetchAirports(): Promise<AirportSummary[]> {
+  const res = await fetch(`${API_BASE_URL}/airports`);
+  if (!res.ok) throw new Error('Failed to load airports');
+  const body = await res.json();
+  return body.airports as AirportSummary[];
+}
+
+export async function fetchFlight(flightNumber: string, airport: string): Promise<FlightState> {
+  const res = await fetch(
+    `${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}?airport=${encodeURIComponent(airport)}`,
+  );
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Flight ${flightNumber} not found`);
@@ -18,22 +27,22 @@ export async function fetchFlight(flightNumber: string): Promise<FlightState> {
   return body.flight as FlightState;
 }
 
-export async function fetchAllFlights(): Promise<FlightState[]> {
-  const res = await fetch(`${API_BASE_URL}/flights`);
+export async function fetchAllFlights(airport: string): Promise<FlightState[]> {
+  const res = await fetch(`${API_BASE_URL}/flights?airport=${encodeURIComponent(airport)}`);
   if (!res.ok) throw new Error('Failed to load flights');
   const body = await res.json();
   return body.flights as FlightState[];
 }
 
-export async function fetchLocalities(): Promise<Locality[]> {
-  const res = await fetch(`${API_BASE_URL}/traffic/localities`);
+export async function fetchLocalities(airport: string): Promise<Locality[]> {
+  const res = await fetch(`${API_BASE_URL}/traffic/${encodeURIComponent(airport)}/localities`);
   if (!res.ok) throw new Error('Failed to load localities');
   const body = await res.json();
   return body.localities as Locality[];
 }
 
-export async function fetchTraffic(localityId: string): Promise<TrafficEstimate> {
-  const res = await fetch(`${API_BASE_URL}/traffic/${encodeURIComponent(localityId)}`);
+export async function fetchTraffic(airport: string, localityId: string): Promise<TrafficEstimate> {
+  const res = await fetch(`${API_BASE_URL}/traffic/${encodeURIComponent(airport)}/${encodeURIComponent(localityId)}`);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error ?? `Failed to load traffic for ${localityId}`);

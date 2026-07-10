@@ -1,10 +1,12 @@
-import { BlrTerminal, TERMINAL_PROFILE } from '../data/airport';
+import { findGateRule, getTerminalProfile, OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
 import { getReportCounts, ReportPhase } from './boardingReports';
 import { BoardingMethod, MethodConfidenceLevel, MethodEstimate } from '../types';
 
 const LOCK_THRESHOLD = 3;
 const LIKELY_THRESHOLD = 0.75;
+// The aircraft-rotation signal floors the jet-bridge probability at this value.
+const QUICK_TURN_JET_BRIDGE_PROB = 0.85;
 
 function hashString(input: string): number {
   let hash = 0;
@@ -31,16 +33,38 @@ function methodLabel(method: BoardingMethod): string {
   }
 }
 
-export function boardingBaseShareAndReason(terminal: string): { share: number; reason: string } {
-  const profile = TERMINAL_PROFILE[terminal as BlrTerminal] ?? TERMINAL_PROFILE.T1;
-  const reason =
-    terminal === 'T2'
-      ? 'T2 is a modern terminal where nearly all gates use aerobridges.'
-      : 'T1 is an older terminal that mixes aerobridge gates with remote stands reached by bus.';
-  return { share: profile.aerobridgeShare, reason };
+interface EstimateInputs {
+  /** Prior probability that boarding/deplaning is via jet bridge, before quick-turn and crowd signals. */
+  baseJetBridgeProb: number;
+  baseReasons: string[];
+  /** When a gate rule matched, its exact non-bridge method (bus vs walk) — better than a hashed tie-break. */
+  preferredNonBridgeMethod?: BoardingMethod;
+  isQuickTurn: boolean;
+  seed: string;
 }
 
-export function disembarkBaseShareAndReason(destinationIata: string): { share: number; reason: string } {
+/**
+ * Builds the boarding-side inputs for a flight at one of our origin
+ * airports. Gate-level knowledge dominates when the gate is known: a
+ * ground-level gate physically cannot have an aerobridge, and an
+ * upper-level gate almost always does — so a matched gate rule replaces the
+ * terminal-wide base rate instead of averaging with it.
+ */
+export function boardingInputs(airport: OriginAirport, terminal: string, gate: string): Omit<EstimateInputs, 'isQuickTurn' | 'seed'> {
+  const gateRule = gate !== 'TBD' ? findGateRule(airport, terminal, gate) : undefined;
+  if (gateRule) {
+    const isBridge = gateRule.method === 'jet_bridge';
+    return {
+      baseJetBridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
+      baseReasons: [`Gate ${gate} ${gateRule.note}.`],
+      preferredNonBridgeMethod: isBridge ? undefined : gateRule.method,
+    };
+  }
+  const profile = getTerminalProfile(airport, terminal);
+  return { baseJetBridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason] };
+}
+
+export function disembarkInputs(destinationIata: string): Omit<EstimateInputs, 'isQuickTurn' | 'seed'> {
   const profile = getDestinationProfile(destinationIata);
   const reason =
     profile.aerobridgeShare >= 0.85
@@ -48,31 +72,23 @@ export function disembarkBaseShareAndReason(destinationIata: string): { share: n
       : profile.aerobridgeShare <= 0.5
         ? `${profile.name} regularly uses remote stands reached by bus or a short walk.`
         : `${profile.name} uses a mix of aerobridge and remote stands.`;
-  return { share: profile.aerobridgeShare, reason };
-}
-
-interface FlightMethodContext {
-  baseShare: number;
-  baseReason: string;
-  isQuickTurn: boolean;
-  seed: string;
+  return { baseJetBridgeProb: profile.aerobridgeShare, baseReasons: [reason] };
 }
 
 /**
  * Registered whenever a flight is created/refreshed from the flight source
  * (live poll or demo generator), so that a crowd report arriving between
- * polls can recompute the estimate immediately without losing the
- * quick-turn signal or base airport context that produced it.
+ * polls can recompute the estimate immediately without losing the gate,
+ * quick-turn, or base airport context that produced it.
  */
-const contexts = new Map<string, FlightMethodContext>();
+const contexts = new Map<string, EstimateInputs>();
 
 function contextKey(flightId: string, phase: ReportPhase): string {
   return `${flightId}:${phase}`;
 }
 
-function computeFromContext(flightId: string, phase: ReportPhase, ctx: FlightMethodContext): MethodEstimate {
+function computeFromContext(flightId: string, phase: ReportPhase, ctx: EstimateInputs): MethodEstimate {
   const reportCounts = getReportCounts(flightId, phase);
-  const reasoning: string[] = [];
 
   const lockedEntry = (Object.entries(reportCounts) as [BoardingMethod, number][]).find(
     ([, count]) => count >= LOCK_THRESHOLD,
@@ -83,18 +99,20 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: FlightMet
       method,
       probability: 1,
       confidenceLevel: 'confirmed',
-      reasoning: [`${count} travelers on this exact flight reported boarding via ${methodLabel(method)}.`],
+      reasoning: [`${count} travelers on this exact flight reported ${methodLabel(method)}.`],
       reportCounts,
       reportsToConfirm: 0,
     };
   }
 
-  let jetBridgeProb = ctx.baseShare;
-  reasoning.push(ctx.baseReason);
+  let jetBridgeProb = ctx.baseJetBridgeProb;
+  const reasoning = [...ctx.baseReasons];
 
   if (ctx.isQuickTurn) {
-    jetBridgeProb = Math.max(jetBridgeProb, 0.85);
-    reasoning.push('This aircraft is due to depart again within the hour — fast turnarounds are usually parked at bridge-served stands.');
+    if (jetBridgeProb < QUICK_TURN_JET_BRIDGE_PROB) {
+      jetBridgeProb = QUICK_TURN_JET_BRIDGE_PROB;
+    }
+    reasoning.push('This aircraft is due out again within the hour — fast turnarounds are usually parked at bridge-served stands.');
   }
 
   const totalReports = Object.values(reportCounts).reduce((sum: number, c) => sum + (c ?? 0), 0);
@@ -107,7 +125,9 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: FlightMet
   }
 
   const isJetBridge = jetBridgeProb >= 0.5;
-  const method: BoardingMethod = isJetBridge ? 'jet_bridge' : tieBreakNonBridge(ctx.seed);
+  const method: BoardingMethod = isJetBridge
+    ? 'jet_bridge'
+    : ctx.preferredNonBridgeMethod ?? tieBreakNonBridge(ctx.seed);
   const probability = isJetBridge ? jetBridgeProb : 1 - jetBridgeProb;
   const confidenceLevel: MethodConfidenceLevel = probability >= LIKELY_THRESHOLD ? 'likely' : 'uncertain';
   const leadingCount = Math.max(0, ...Object.values(reportCounts).map((c) => c ?? 0));
@@ -126,12 +146,11 @@ function computeFromContext(flightId: string, phase: ReportPhase, ctx: FlightMet
 export function estimateAndRegister(
   flightId: string,
   phase: ReportPhase,
-  baseShare: number,
-  baseReason: string,
+  inputs: Omit<EstimateInputs, 'isQuickTurn' | 'seed'>,
   isQuickTurn: boolean,
   seed: string,
 ): MethodEstimate {
-  const ctx: FlightMethodContext = { baseShare, baseReason, isQuickTurn, seed };
+  const ctx: EstimateInputs = { ...inputs, isQuickTurn, seed };
   contexts.set(contextKey(flightId, phase), ctx);
   return computeFromContext(flightId, phase, ctx);
 }

@@ -11,7 +11,7 @@ interface UseFlightStatusResult {
   lastEvent: FlightUpdateEvent | null;
 }
 
-export function useFlightStatus(flightNumber: string | null): UseFlightStatusResult {
+export function useFlightStatus(flightNumber: string | null, airport: string): UseFlightStatusResult {
   const [flight, setFlight] = useState<FlightState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function useFlightStatus(flightNumber: string | null): UseFlightStatusRes
     setLoading(true);
     setError(null);
 
-    fetchFlight(flightNumber)
+    fetchFlight(flightNumber, airport)
       .then((data) => {
         if (!cancelled) setFlight(data);
       })
@@ -60,7 +60,7 @@ export function useFlightStatus(flightNumber: string | null): UseFlightStatusRes
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [flightNumber]);
+  }, [flightNumber, airport]);
 
   return { flight, loading, error, lastEvent };
 }

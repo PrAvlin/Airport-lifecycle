@@ -1,10 +1,11 @@
 # BLR Airport Lifecycle
 
 A mobile app scoped to **Kempegowda International Airport (BLR), Bangalore**
-that walks a passenger through their journey — from arriving at the terminal
-to boarding — with live flight status, gate/terminal info, and live traffic
-conditions on the drive to the airport, so they can decide when to leave and
-how to spend their time once there.
+that walks a passenger through their full door-to-door journey — traffic to
+the airport, terminal entry, security, boarding, the flight itself, touchdown,
+deplaning, immigration & customs, baggage claim, and exit to the arrival
+city — with live flight status and live traffic so they can decide when to
+leave and how to spend their time along the way.
 
 ## Structure
 
@@ -23,15 +24,32 @@ mobile/    Expo (React Native + TypeScript) app consuming that API.
 | Live drive-time traffic to BLR | [TomTom Routing API](https://developer.tomtom.com/routing-api) | 2,500 requests/day | Used from a set of Bangalore locality presets to the airport's coordinates. |
 
 **What's not available from any free API, for any airport:** whether a
-specific flight boards via jet bridge or shuttle bus, and live security/
-immigration queue lengths. The backend estimates these instead of inventing
-fake "live" numbers:
-- **Boarding method** is derived deterministically from BLR's real terminal
-  layout — T2 (opened 2022) is almost entirely aerobridge-served, T1 mixes
-  aerobridge gates with bused remote stands — and is always labeled
-  "estimated" in the UI, never presented as confirmed.
-- **Security/immigration wait** uses a time-of-day-based typical estimate
-  (peak vs. off-peak hours), also labeled as an estimate.
+specific flight boards or deplanes via jet bridge vs. shuttle bus, and live
+security/immigration/baggage queue lengths. The backend estimates these
+instead of inventing fake "live" numbers, and improves the estimate two ways:
+
+- **Terminal/airport-layout heuristic.** Boarding at BLR is derived from its
+  real terminal layout (T2, opened 2022, is almost entirely aerobridge-served;
+  T1 mixes aerobridge gates with bused remote stands). Deplaning at the
+  destination uses a small curated profile per airport BLR actually flies to
+  (LHR, DXB, SIN, DEL, BOM, HYD, MAA, PNQ), with a generic fallback for
+  anything else. Always labeled "estimated," never presented as confirmed.
+- **Aircraft-rotation signal.** AeroDataBox reports each flight's aircraft
+  registration and real scheduled times. If the same airframe that just
+  landed at BLR is scheduled to depart again within ~90 minutes, that's a
+  real operational signal (not a guess) that it's on a contact/aerobridge
+  stand, since airlines route fast turnarounds to bridge gates whenever
+  possible. This is cross-referenced from data already being fetched, at no
+  extra API-quota cost (see `direction=Both` in `aerodatabox.ts`).
+- **Crowdsourced confirmation.** Passengers can report what they actually saw
+  boarding or deplaning (`POST /flights/:flightNumber/boarding-report`). Once
+  3 independent reports agree for that specific flight, it's locked in as
+  `confirmed` and stops being an estimate — the same pattern Waze/Maps use for
+  crowd-verified data. The mobile app shows a quick "Was this correct?"
+  prompt under the boarding badge while it's still an estimate.
+- **Security/immigration/baggage wait** uses a time-of-day-based typical
+  estimate (peak vs. off-peak hours, computed in the destination's local
+  timezone for arrival-side waits), also labeled as an estimate.
 
 ### Demo mode
 
@@ -71,7 +89,8 @@ Environment variables (all optional — omit to run in demo mode):
 Endpoints:
 - `GET /health` — status + whether live flights/traffic are configured
 - `GET /flights` — today's BLR departures (live or demo) + `meta.dataSource`
-- `GET /flights/:flightNumber` — a single flight's current state
+- `GET /flights/:flightNumber` — a single flight's current state (departure + arrival/deplaning info)
+- `POST /flights/:flightNumber/boarding-report` — body `{ phase: 'board'|'deplane', method: 'jet_bridge'|'shuttle_bus'|'walk_to_aircraft' }`; submits a passenger's crowdsourced report
 - `GET /traffic/localities` — preset Bangalore localities
 - `GET /traffic/:localityId` — live (or static) drive time from that locality to BLR
 - Socket.IO: emit `subscribe`/`unsubscribe` with a flight number; listen for `flight:snapshot` and `flight:update`

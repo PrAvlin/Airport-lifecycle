@@ -5,6 +5,19 @@ function minutesUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
 }
 
+function formatTimeInZone(iso: string, timeZone: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone });
+  } catch {
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+}
+
+// How long after touchdown before a passenger is realistically off the aircraft,
+// used only to sequence the timeline - not a claim about any specific flight.
+const TAXI_TO_STAND_MINUTES = 15;
+const DISEMBARK_MINUTES = 10;
+
 export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
   return useMemo(() => {
     if (!flight) return [];
@@ -68,9 +81,65 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'departed',
         label: 'Departed',
-        detail: `Departure ${new Date(flight.estimatedDeparture).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        detail: `Departure ${new Date(flight.estimatedDeparture).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · lands ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local`,
         isDone: isDeparted,
         isActive: isDeparted,
+      },
+    );
+
+    // ---- arrival-side stages: touchdown -> deplaning -> immigration -> bags -> exit ----
+    const minutesToTouchdown = minutesUntil(flight.arrival.estimatedArrival);
+    const minutesToGate = minutesToTouchdown + TAXI_TO_STAND_MINUTES;
+    const minutesToDeplaningDone = minutesToGate + DISEMBARK_MINUTES;
+    const immigrationWaitMinutes = flight.isInternational ? flight.arrival.immigrationWaitMinutes ?? 0 : 0;
+    const minutesToImmigrationDone = minutesToDeplaningDone + immigrationWaitMinutes;
+    const minutesToBaggageDone = minutesToImmigrationDone + flight.arrival.baggageWaitMinutes;
+
+    stages.push(
+      {
+        id: 'arrival',
+        label: `Arrival at ${flight.arrival.airportName}`,
+        detail: `Touching down ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local time`,
+        isDone: minutesToGate <= 0,
+        isActive: minutesToTouchdown <= 0 && minutesToGate > 0,
+      },
+      {
+        id: 'deplaning',
+        label: 'Deplaning',
+        detail:
+          disembarkMethodLabel(flight.arrival.disembarkMethod) +
+          (flight.arrival.disembarkMethodConfidence === 'estimated' ? ' (estimated — confirm onboard)' : ''),
+        isDone: minutesToDeplaningDone <= 0,
+        isActive: minutesToGate <= 0 && minutesToDeplaningDone > 0,
+      },
+    );
+
+    if (flight.isInternational) {
+      stages.push({
+        id: 'arrival_immigration',
+        label: 'Immigration & Customs',
+        detail: `~${immigrationWaitMinutes} min typical wait`,
+        isDone: minutesToImmigrationDone <= 0,
+        isActive: minutesToDeplaningDone <= 0 && minutesToImmigrationDone > 0,
+      });
+    }
+
+    stages.push(
+      {
+        id: 'baggage_claim',
+        label: 'Baggage claim',
+        detail: flight.arrival.baggageBelt
+          ? `Belt ${flight.arrival.baggageBelt} · ~${flight.arrival.baggageWaitMinutes} min typical wait`
+          : `Belt not yet published · ~${flight.arrival.baggageWaitMinutes} min typical wait`,
+        isDone: minutesToBaggageDone <= 0,
+        isActive: minutesToImmigrationDone <= 0 && minutesToBaggageDone > 0,
+      },
+      {
+        id: 'exit',
+        label: 'Exit to arrival city',
+        detail: `Welcome to ${flight.arrival.airportName}.`,
+        isDone: minutesToBaggageDone <= 0,
+        isActive: minutesToBaggageDone <= 0,
       },
     );
 
@@ -86,6 +155,19 @@ export function boardingMethodLabel(method: FlightState['boardingMethod']): stri
       return 'Boarding via shuttle bus — you will be bused to the aircraft on the tarmac.';
     case 'walk_to_aircraft':
       return 'Boarding on foot — a short walk across the apron to the aircraft.';
+    default:
+      return '';
+  }
+}
+
+export function disembarkMethodLabel(method: FlightState['boardingMethod']): string {
+  switch (method) {
+    case 'jet_bridge':
+      return 'Deplaning via jet bridge — walk directly off into the terminal.';
+    case 'shuttle_bus':
+      return 'Deplaning onto a shuttle bus — you will be bused from the aircraft to the terminal.';
+    case 'walk_to_aircraft':
+      return 'Deplaning on foot — a short walk across the apron into the terminal.';
     default:
       return '';
   }

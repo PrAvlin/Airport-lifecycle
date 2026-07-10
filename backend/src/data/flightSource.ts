@@ -1,6 +1,7 @@
 import { config } from '../config';
 import { DataSource, FlightState, FlightUpdateEvent, FlightUpdateEventType } from '../types';
 import { seedDemoFlights } from './flights';
+import { applyReportOverlay, ReportPhase, submitReport } from '../services/boardingReports';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
@@ -8,6 +9,12 @@ const store = new Map<string, FlightState>();
 let currentDataSource: DataSource = config.aerodatabox.enabled ? 'live' : 'demo';
 let lastError: string | null = null;
 let lastFetchedAt: string | null = null;
+let broadcastEmitter: EventEmitter | null = null;
+
+/** Set once at server startup so parts of the app outside the poll loop (e.g. the reports route) can emit socket events too. */
+export function setBroadcastEmitter(emit: EventEmitter): void {
+  broadcastEmitter = emit;
+}
 
 export function getDataSource(): DataSource {
   return currentDataSource;
@@ -29,7 +36,7 @@ export function seedDemoMode(): void {
   currentDataSource = 'demo';
   store.clear();
   for (const flight of seedDemoFlights(8)) {
-    store.set(flight.flightNumber, flight);
+    store.set(flight.flightNumber, applyReportOverlay(flight));
   }
 }
 
@@ -37,7 +44,7 @@ export function patchDemoFlight(flightNumber: string, patch: Partial<FlightState
   const key = flightNumber.toUpperCase();
   const existing = store.get(key);
   if (!existing) return undefined;
-  const updated: FlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
+  const updated = applyReportOverlay({ ...existing, ...patch, lastUpdated: new Date().toISOString() });
   store.set(key, updated);
   return updated;
 }
@@ -53,14 +60,17 @@ function formatTime(iso: string): string {
 /**
  * Merges a freshly-fetched live snapshot into the store, diffing against the
  * previous state per flight so the same gate/boarding-method/status/delay
- * notifications used in demo mode fire for real changes too.
+ * notifications used in demo mode fire for real changes too. Any locked
+ * crowd-sourced confirmations are re-applied on top, since a fresh API poll
+ * would otherwise overwrite them with the plain heuristic guess again.
  */
 export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): void {
   currentDataSource = 'live';
   lastError = null;
   lastFetchedAt = new Date().toISOString();
 
-  for (const nextFlight of flights) {
+  for (const fetched of flights) {
+    const nextFlight = applyReportOverlay(fetched);
     const previous = store.get(nextFlight.flightNumber);
     store.set(nextFlight.flightNumber, nextFlight);
 
@@ -94,4 +104,32 @@ export function applyLiveSnapshot(flights: FlightState[], emit?: EventEmitter): 
 
 export function recordFetchError(message: string): void {
   lastError = message;
+}
+
+/** Submits a passenger's report of what they actually saw; applies + broadcasts immediately once consensus locks it in. */
+export function reportBoardingMethod(
+  flightNumber: string,
+  phase: ReportPhase,
+  method: FlightState['boardingMethod'],
+): { flight: FlightState; locked: boolean } | undefined {
+  const flight = getFlightByNumber(flightNumber);
+  if (!flight) return undefined;
+
+  const result = submitReport(flight.id, phase, method);
+  if (!result.locked) {
+    return { flight, locked: false };
+  }
+
+  const updated = applyReportOverlay(flight);
+  store.set(flight.flightNumber, updated);
+
+  if (broadcastEmitter) {
+    const label = phase === 'board' ? 'Boarding' : 'Deplaning';
+    const methodLabel = result.method!.replace(/_/g, ' ');
+    broadcastEmitter(
+      makeEvent('boarding_method_change', updated, `${label} method for ${flightNumber} confirmed by fellow passengers: ${methodLabel}`),
+    );
+  }
+
+  return { flight: updated, locked: true };
 }

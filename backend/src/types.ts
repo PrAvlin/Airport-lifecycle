@@ -16,11 +16,32 @@ export type JourneyStageId =
   | 'immigration'
   | 'gate_area'
   | 'boarding'
-  | 'departed';
+  | 'departed'
+  | 'arrival'
+  | 'deplaning'
+  | 'arrival_immigration'
+  | 'baggage_claim'
+  | 'exit';
 
 export interface CheckpointEstimate {
   name: string;
   estimatedWaitMinutes: number;
+}
+
+export interface ArrivalInfo {
+  airportIata: string;
+  airportName: string;
+  terminal: string;
+  timezone: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  disembarkMethod: BoardingMethod;
+  disembarkMethodConfidence: 'estimated' | 'confirmed';
+  /** Only present when the source (AeroDataBox) actually publishes a belt number. */
+  baggageBelt?: string;
+  /** Only present for international arrivals. */
+  immigrationWaitMinutes?: number;
+  baggageWaitMinutes: number;
 }
 
 export interface FlightState {
@@ -47,6 +68,7 @@ export interface FlightState {
   };
   lastUpdated: string;
   dataSource: DataSource;
+  arrival: ArrivalInfo;
 }
 
 export type DataSource = 'live' | 'demo';

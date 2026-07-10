@@ -7,6 +7,7 @@ import { useTraffic } from '../hooks/useTraffic';
 import { StageTimeline } from '../components/StageTimeline';
 import { BoardingMethodBadge } from '../components/BoardingMethodBadge';
 import { DataSourceBadge } from '../components/DataSourceBadge';
+import { BoardingReportPrompt } from '../components/BoardingReportPrompt';
 import { TrafficCard } from '../components/TrafficCard';
 import { colors, statusColor } from '../theme';
 import type { RootStackParamList } from '../navigation';
@@ -90,8 +91,13 @@ export function JourneyScreen({ route }: Props) {
 
       <Text style={styles.sectionTitle}>How you'll board</Text>
       <BoardingMethodBadge method={flight.boardingMethod} />
-      {flight.boardingMethodConfidence === 'estimated' && (
-        <Text style={styles.estimateNote}>Estimated from terminal — confirm at your gate display.</Text>
+      {flight.boardingMethodConfidence === 'estimated' ? (
+        <>
+          <Text style={styles.estimateNote}>Estimated from terminal — confirm at your gate display.</Text>
+          <BoardingReportPrompt key={`${flight.id}:board`} flightNumber={flight.flightNumber} phase="board" />
+        </>
+      ) : (
+        <Text style={styles.confirmedNote}>✓ Confirmed by passengers</Text>
       )}
 
       <TrafficCard
@@ -136,4 +142,5 @@ const styles = StyleSheet.create({
   infoValue: { color: colors.textPrimary, fontSize: 17, fontWeight: '700', marginTop: 4 },
   sectionTitle: { color: colors.textPrimary, fontSize: 17, fontWeight: '700', marginTop: 28, marginBottom: 12 },
   estimateNote: { color: colors.textSecondary, fontSize: 12, marginTop: 8 },
+  confirmedNote: { color: colors.success, fontSize: 12, marginTop: 8, fontWeight: '600' },
 });

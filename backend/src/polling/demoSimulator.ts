@@ -1,5 +1,6 @@
 import { BoardingMethod, FlightState, FlightStatus, FlightUpdateEvent, FlightUpdateEventType } from '../types';
 import { listFlights, patchDemoFlight } from '../data/flightSource';
+import { getConfirmedMethod } from '../services/boardingReports';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
@@ -34,7 +35,7 @@ function tickFlight(flight: FlightState, emit: EventEmitter): void {
     }
   }
 
-  if (flight.status === 'scheduled' && roll >= 0.06 && roll < 0.11) {
+  if (flight.status === 'scheduled' && roll >= 0.06 && roll < 0.11 && !getConfirmedMethod(flight.id, 'board')) {
     const options = BOARDING_METHODS.filter((m) => m !== flight.boardingMethod);
     const newMethod = options[Math.floor(Math.random() * options.length)];
     const updated = patchDemoFlight(flight.flightNumber, { boardingMethod: newMethod });

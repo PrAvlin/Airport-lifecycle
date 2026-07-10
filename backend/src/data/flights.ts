@@ -1,12 +1,20 @@
 import { BLR_AIRPORT, BlrTerminal } from './airport';
-import { estimateBoardingMethod } from '../services/boardingHeuristic';
-import { estimateImmigrationWaitMinutes, estimateSecurityWaitMinutes } from '../services/waitTimeEstimate';
+import { getDestinationProfile } from './destinationAirports';
+import { estimateBoardingMethod, estimateDisembarkMethod } from '../services/boardingHeuristic';
+import {
+  estimateArrivalImmigrationWaitMinutes,
+  estimateBaggageWaitMinutes,
+  estimateImmigrationWaitMinutes,
+  estimateSecurityWaitMinutes,
+} from '../services/waitTimeEstimate';
 import { FlightState } from '../types';
 
 const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
 const TERMINALS: BlrTerminal[] = ['T1', 'T2'];
 const GATES = ['1', '4', '12', '3', '7', '2', '9', '5'];
+const ARRIVAL_TERMINALS = ['1', '2', '3'];
 const DESTINATIONS = ['BOM', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD', 'DEL', 'PNQ'];
+const INTERNATIONAL_DESTINATIONS = new Set(['DXB', 'SIN', 'LHR']);
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -37,7 +45,7 @@ function randomFlightNumber(airline: string): string {
 export function createMockFlight(overrides: Partial<FlightState> = {}): FlightState {
   const airline = pick(AIRLINES);
   const destination = pick(DESTINATIONS);
-  const isInternational = ['DXB', 'SIN', 'LHR'].includes(destination);
+  const isInternational = INTERNATIONAL_DESTINATIONS.has(destination);
   const departureInMinutes = 45 + Math.floor(Math.random() * 120);
   const terminal = pick(TERMINALS);
   const gate = pick(GATES);
@@ -45,6 +53,12 @@ export function createMockFlight(overrides: Partial<FlightState> = {}): FlightSt
   const estimatedDeparture = minutesFromNow(departureInMinutes);
   const boardingLeadMinutes = isInternational ? 45 : 30;
   const now = new Date();
+
+  const destinationProfile = getDestinationProfile(destination);
+  const arrivalTerminal = pick(ARRIVAL_TERMINALS);
+  const scheduledArrival = new Date(
+    new Date(estimatedDeparture).getTime() + destinationProfile.typicalFlightMinutes * 60_000,
+  ).toISOString();
 
   const flight: FlightState = {
     id: `${flightNumber}_${estimatedDeparture}`,
@@ -70,6 +84,21 @@ export function createMockFlight(overrides: Partial<FlightState> = {}): FlightSt
     },
     lastUpdated: new Date().toISOString(),
     dataSource: 'demo',
+    arrival: {
+      airportIata: destination,
+      airportName: destinationProfile.name,
+      terminal: arrivalTerminal,
+      timezone: destinationProfile.timezone,
+      scheduledArrival,
+      estimatedArrival: scheduledArrival,
+      disembarkMethod: estimateDisembarkMethod(destination, arrivalTerminal, flightNumber),
+      disembarkMethodConfidence: 'estimated',
+      baggageBelt: undefined,
+      immigrationWaitMinutes: isInternational
+        ? estimateArrivalImmigrationWaitMinutes(new Date(scheduledArrival), destinationProfile.timezone)
+        : undefined,
+      baggageWaitMinutes: estimateBaggageWaitMinutes(isInternational),
+    },
   };
 
   return { ...flight, ...overrides };

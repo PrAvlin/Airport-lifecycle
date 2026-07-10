@@ -16,6 +16,20 @@ export interface CheckpointEstimate {
   estimatedWaitMinutes: number;
 }
 
+export interface ArrivalInfo {
+  airportIata: string;
+  airportName: string;
+  terminal: string;
+  timezone: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  disembarkMethod: BoardingMethod;
+  disembarkMethodConfidence: 'estimated' | 'confirmed';
+  baggageBelt?: string;
+  immigrationWaitMinutes?: number;
+  baggageWaitMinutes: number;
+}
+
 export interface FlightState {
   id: string;
   flightNumber: string;
@@ -38,6 +52,7 @@ export interface FlightState {
   };
   lastUpdated: string;
   dataSource: DataSource;
+  arrival: ArrivalInfo;
 }
 
 export type FlightUpdateEventType =
@@ -62,7 +77,12 @@ export type JourneyStageId =
   | 'immigration'
   | 'gate_area'
   | 'boarding'
-  | 'departed';
+  | 'departed'
+  | 'arrival'
+  | 'deplaning'
+  | 'arrival_immigration'
+  | 'baggage_claim'
+  | 'exit';
 
 export interface JourneyStage {
   id: JourneyStageId;

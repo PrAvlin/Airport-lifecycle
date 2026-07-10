@@ -3,7 +3,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { config } from './config';
-import { seedDemoMode } from './data/flightSource';
+import { seedDemoMode, setBroadcastEmitter } from './data/flightSource';
 import { flightsRouter } from './routes/flights';
 import { trafficRouter } from './routes/traffic';
 import { startDemoSimulation } from './polling/demoSimulator';
@@ -37,6 +37,7 @@ const emit = (event: Parameters<typeof broadcastFlightUpdate>[1]) => {
   broadcastFlightUpdate(io, event);
   console.log(`[${event.type}] ${event.message}`);
 };
+setBroadcastEmitter(emit);
 
 if (config.aerodatabox.enabled) {
   console.log('AERODATABOX_API_KEY found — polling live BLR departures.');

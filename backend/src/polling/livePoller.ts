@@ -6,11 +6,23 @@ import { FlightUpdateEvent } from '../types';
 
 type EventEmitter = (event: FlightUpdateEvent) => void;
 
+// AeroDataBox's free tier rate-limits by requests-per-second, not just a
+// monthly cap. Firing all airport requests back-to-back tripped 429s, so
+// each one now waits its turn.
+const BETWEEN_AIRPORTS_DELAY_MS = 2000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function pollOnce(emit: EventEmitter): Promise<void> {
-  // Polled sequentially, one call per airport per cycle. With three origin
-  // airports this triples quota use versus one - keep the poll interval
-  // conservative or trim ORIGIN_AIRPORTS if the free tier runs hot.
-  for (const airport of Object.values(ORIGIN_AIRPORTS)) {
+  // Polled sequentially, one call per airport per cycle, spaced out to
+  // respect the per-second rate limit. With three origin airports this
+  // triples quota use versus one - keep the poll interval conservative or
+  // trim ORIGIN_AIRPORTS if the free tier runs hot.
+  const airports = Object.values(ORIGIN_AIRPORTS);
+  for (let i = 0; i < airports.length; i++) {
+    const airport = airports[i];
     try {
       const flights = await fetchLiveDepartures(airport);
       applyLiveSnapshot(airport.iata, flights, emit);
@@ -19,6 +31,9 @@ async function pollOnce(emit: EventEmitter): Promise<void> {
       const message = err instanceof Error ? err.message : 'Unknown AeroDataBox error';
       recordFetchError(message);
       console.error(`[live-poller] ${airport.iata} fetch failed: ${message}`);
+    }
+    if (i < airports.length - 1) {
+      await sleep(BETWEEN_AIRPORTS_DELAY_MS);
     }
   }
 }

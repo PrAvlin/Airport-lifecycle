@@ -137,6 +137,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
 
   const destinationProfile = getDestinationProfile(destinationIata);
   const arrivalTerminal = raw.arrival?.terminal ?? 'TBD';
+  const arrivalGate = raw.arrival?.gate ?? 'TBD';
   const arrivalScheduledUtc = raw.arrival?.scheduledTime?.utc ?? estimatedDeparture;
   const arrivalEstimatedUtc = raw.arrival?.revisedTime?.utc ?? arrivalScheduledUtc;
 
@@ -151,7 +152,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
   const disembark = estimateAndRegister(
     id,
     'deplane',
-    disembarkInputs(destinationIata),
+    disembarkInputs(destinationIata, arrivalTerminal, arrivalGate),
     isQuickTurn,
     `deplane:${destinationIata}:${arrivalTerminal}:${flightNumber}`,
   );
@@ -184,6 +185,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurnRegs: Set<string>, airpo
       airportName: raw.arrival?.airport?.name ?? destinationProfile.name,
       airportCity: raw.arrival?.airport?.municipalityName ?? destinationProfile.city,
       terminal: arrivalTerminal,
+      gate: arrivalGate,
       timezone: destinationProfile.timezone,
       scheduledArrival: arrivalScheduledUtc,
       estimatedArrival: arrivalEstimatedUtc,

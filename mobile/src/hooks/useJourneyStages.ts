@@ -107,7 +107,9 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'arrival',
         label: `Arrival at ${flight.arrival.airportName}`,
-        detail: `Touching down ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local time`,
+        detail:
+          `Touching down ~${formatTimeInZone(flight.arrival.estimatedArrival, flight.arrival.timezone)} local time` +
+          (flight.arrival.gate !== 'TBD' ? ` · Gate ${flight.arrival.gate}` : ' · Gate not yet published'),
         isDone: minutesToGate <= 0,
         isActive: minutesToTouchdown <= 0 && minutesToGate > 0,
       },

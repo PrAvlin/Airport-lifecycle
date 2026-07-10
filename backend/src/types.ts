@@ -59,6 +59,8 @@ export interface ArrivalInfo {
   airportName: string;
   airportCity: string;
   terminal: string;
+  /** 'TBD' until the destination airport publishes it - usually not until closer to landing. */
+  gate: string;
   timezone: string;
   scheduledArrival: string;
   estimatedArrival: string;

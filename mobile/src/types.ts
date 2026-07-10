@@ -32,6 +32,7 @@ export interface ArrivalInfo {
   airportName: string;
   airportCity: string;
   terminal: string;
+  gate: string;
   timezone: string;
   scheduledArrival: string;
   estimatedArrival: string;

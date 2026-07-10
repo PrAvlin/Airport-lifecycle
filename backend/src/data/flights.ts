@@ -1,4 +1,4 @@
-import { ORIGIN_AIRPORTS, OriginAirport } from './airports';
+import { getOriginAirport, isKnownOrigin, ORIGIN_AIRPORTS, OriginAirport } from './airports';
 import { getDestinationProfile } from './destinationAirports';
 import { boardingInputs, disembarkInputs, estimateAndRegister } from '../services/methodEstimate';
 import {
@@ -63,7 +63,12 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
   const now = new Date();
 
   const destinationProfile = getDestinationProfile(destination);
-  const arrivalTerminal = pick(ARRIVAL_TERMINALS);
+  // When the destination happens to be one of our own origin airports
+  // (BLR/MAA/CJB), reuse its real terminal/gate map so demo mode also
+  // exercises gate-level deplaning intelligence instead of always TBD.
+  const destAirport = isKnownOrigin(destination) ? getOriginAirport(destination) : undefined;
+  const arrivalTerminal = destAirport ? pick(Object.keys(destAirport.terminals)) : pick(ARRIVAL_TERMINALS);
+  const arrivalGate = destAirport ? pickGate(destAirport, arrivalTerminal) : 'TBD';
   const scheduledArrival = new Date(
     new Date(estimatedDeparture).getTime() + destinationProfile.typicalFlightMinutes * 60_000,
   ).toISOString();
@@ -82,7 +87,7 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
   const disembark = estimateAndRegister(
     id,
     'deplane',
-    disembarkInputs(destination),
+    disembarkInputs(destination, arrivalTerminal, arrivalGate),
     false,
     `deplane:${destination}:${arrivalTerminal}:${flightNumber}`,
   );
@@ -115,6 +120,7 @@ export function createMockFlight(airport: OriginAirport, overrides: Partial<Flig
       airportName: destinationProfile.name,
       airportCity: destinationProfile.city,
       terminal: arrivalTerminal,
+      gate: arrivalGate,
       timezone: destinationProfile.timezone,
       scheduledArrival,
       estimatedArrival: scheduledArrival,

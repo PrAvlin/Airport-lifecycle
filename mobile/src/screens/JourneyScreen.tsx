@@ -85,6 +85,13 @@ export function JourneyScreen({ route }: Props) {
           <Text style={styles.infoLabel}>International</Text>
           <Text style={styles.infoValue}>{flight.isInternational ? 'Yes' : 'No'}</Text>
         </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Arrival terminal / gate</Text>
+          <Text style={styles.infoValue}>
+            {flight.arrival.terminal === 'TBD' ? 'TBD' : flight.arrival.terminal} ·{' '}
+            {flight.arrival.gate === 'TBD' ? 'Not yet published' : flight.arrival.gate}
+          </Text>
+        </View>
       </View>
 
       <MethodEstimateCard

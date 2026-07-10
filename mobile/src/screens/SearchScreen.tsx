@@ -24,12 +24,15 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type Scope = 'all' | 'domestic' | 'international';
+
 export function SearchScreen({ navigation }: Props) {
   const [airports, setAirports] = useState<AirportSummary[]>([]);
   const [selectedAirport, setSelectedAirport] = useState('BLR');
   const [query, setQuery] = useState('');
   const [flights, setFlights] = useState<FlightState[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<Scope>('all');
 
   useEffect(() => {
     fetchAirports()
@@ -45,9 +48,9 @@ export function SearchScreen({ navigation }: Props) {
       .finally(() => setLoading(false));
   }, [selectedAirport]);
 
-  const filtered = flights.filter((f) =>
-    f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const filtered = flights
+    .filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((f) => scope === 'all' || f.isInternational === (scope === 'international'));
   const currentAirport = airports.find((a) => a.iata === selectedAirport);
 
   return (
@@ -78,6 +81,25 @@ export function SearchScreen({ navigation }: Props) {
             </TouchableOpacity>
           ))}
         </View>
+
+        <View style={styles.scopeRow}>
+          <TouchableOpacity
+            style={[styles.scopeChip, scope === 'domestic' && styles.scopeChipSelected]}
+            onPress={() => setScope(scope === 'domestic' ? 'all' : 'domestic')}
+          >
+            <Text style={[styles.scopeChipText, scope === 'domestic' && styles.scopeChipTextSelected]}>
+              Domestic
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.scopeChip, scope === 'international' && styles.scopeChipSelected]}
+            onPress={() => setScope(scope === 'international' ? 'all' : 'international')}
+          >
+            <Text style={[styles.scopeChipText, scope === 'international' && styles.scopeChipTextSelected]}>
+              International
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <TextInput
@@ -94,7 +116,9 @@ export function SearchScreen({ navigation }: Props) {
         }}
       />
 
-      <Text style={styles.sectionLabel}>Next departures (IST)</Text>
+      <Text style={styles.sectionLabel}>
+        Next {scope === 'all' ? '' : `${scope} `}departures (IST)
+      </Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
@@ -164,6 +188,19 @@ const styles = StyleSheet.create({
   airportIataSelected: { color: colors.background },
   airportCity: { color: colors.textSecondary, fontSize: 11, marginTop: 1 },
   airportCitySelected: { color: colors.background },
+  scopeRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  scopeChip: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 12,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  scopeChipSelected: { backgroundColor: colors.accent, borderColor: colors.accent },
+  scopeChipText: { color: colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  scopeChipTextSelected: { color: colors.background },
   input: {
     backgroundColor: colors.surface,
     borderRadius: 12,

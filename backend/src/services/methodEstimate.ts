@@ -1,4 +1,4 @@
-import { findGateRule, getTerminalProfile, OriginAirport } from '../data/airports';
+import { findGateRule, getOriginAirport, getTerminalProfile, isKnownOrigin, OriginAirport } from '../data/airports';
 import { getDestinationProfile } from '../data/destinationAirports';
 import { getReportCounts, ReportPhase } from './boardingReports';
 import { BoardingMethod, MethodConfidenceLevel, MethodEstimate } from '../types';
@@ -64,7 +64,31 @@ export function boardingInputs(airport: OriginAirport, terminal: string, gate: s
   return { baseJetBridgeProb: profile.aerobridgeShare, baseReasons: [profile.reason] };
 }
 
-export function disembarkInputs(destinationIata: string): Omit<EstimateInputs, 'isQuickTurn' | 'seed'> {
+/**
+ * Builds the deplaning-side inputs. If the destination happens to be one of
+ * our own origin airports (BLR/MAA/CJB) and its arrival gate is already
+ * known, the same gate-level physical-layout knowledge used for boarding
+ * applies here too and dominates over the airport-wide profile.
+ */
+export function disembarkInputs(
+  destinationIata: string,
+  arrivalTerminal?: string,
+  arrivalGate?: string,
+): Omit<EstimateInputs, 'isQuickTurn' | 'seed'> {
+  if (arrivalGate && arrivalGate !== 'TBD' && isKnownOrigin(destinationIata)) {
+    const airport = getOriginAirport(destinationIata);
+    const terminal = arrivalTerminal && arrivalTerminal !== 'TBD' ? arrivalTerminal : airport.defaultTerminal;
+    const gateRule = findGateRule(airport, terminal, arrivalGate);
+    if (gateRule) {
+      const isBridge = gateRule.method === 'jet_bridge';
+      return {
+        baseJetBridgeProb: isBridge ? gateRule.probability : 1 - gateRule.probability,
+        baseReasons: [`Arrival gate ${arrivalGate} ${gateRule.note}.`],
+        preferredNonBridgeMethod: isBridge ? undefined : gateRule.method,
+      };
+    }
+  }
+
   const profile = getDestinationProfile(destinationIata);
   const reason =
     profile.aerobridgeShare >= 0.85

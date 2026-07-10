@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Airport Lifecycle",
+    "slug": "airport-lifecycle",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0b1d3a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pravlin.airportlifecycle"
+    },
+    "android": {
+      "package": "com.pravlin.airportlifecycle",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1d3a"
+      }
+    },
+    "plugins": ["expo-notifications"],
+    "extra": {
+      "apiBaseUrl": "http://localhost:4000"
+    }
+  }
+}

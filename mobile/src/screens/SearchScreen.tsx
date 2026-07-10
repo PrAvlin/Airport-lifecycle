@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { fetchAllFlights } from '../api/client';
 import { FlightState } from '../types';
 import { colors } from '../theme';
+import { DataSourceBadge } from '../components/DataSourceBadge';
 import type { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Search'>;
@@ -34,8 +35,11 @@ export function SearchScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Airport Lifecycle</Text>
-      <Text style={styles.subtitle}>Track your journey from entry to boarding.</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.title}>BLR Airport Lifecycle</Text>
+        {flights[0] && <DataSourceBadge source={flights[0].dataSource} />}
+      </View>
+      <Text style={styles.subtitle}>Kempegowda International Airport · Track your journey from entry to boarding.</Text>
 
       <TextInput
         style={styles.input}
@@ -49,7 +53,7 @@ export function SearchScreen({ navigation }: Props) {
         }}
       />
 
-      <Text style={styles.sectionLabel}>Demo flights (simulated live data)</Text>
+      <Text style={styles.sectionLabel}>Today's departures from BLR</Text>
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
@@ -65,10 +69,10 @@ export function SearchScreen({ navigation }: Props) {
               <View>
                 <Text style={styles.cardFlight}>{item.flightNumber}</Text>
                 <Text style={styles.cardRoute}>
-                  {item.origin} → {item.destination} · {item.airline}
+                  BLR → {item.destination} · {item.airline}
                 </Text>
               </View>
-              <Text style={styles.cardGate}>Gate {item.gate}</Text>
+              <Text style={styles.cardGate}>{item.terminal} · Gate {item.gate}</Text>
             </TouchableOpacity>
           )}
         />
@@ -79,7 +83,8 @@ export function SearchScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: 20, paddingTop: 60 },
-  title: { color: colors.textPrimary, fontSize: 28, fontWeight: '700' },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { color: colors.textPrimary, fontSize: 26, fontWeight: '700' },
   subtitle: { color: colors.textSecondary, fontSize: 14, marginTop: 4, marginBottom: 20 },
   input: {
     backgroundColor: colors.surface,

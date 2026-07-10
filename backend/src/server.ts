@@ -2,22 +2,29 @@ import cors from 'cors';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { seedFlights } from './data/flights';
+import { config } from './config';
+import { seedDemoMode } from './data/flightSource';
 import { flightsRouter } from './routes/flights';
-import { startSimulation } from './simulation/engine';
+import { trafficRouter } from './routes/traffic';
+import { startDemoSimulation } from './polling/demoSimulator';
+import { startLivePolling } from './polling/livePoller';
 import { broadcastFlightUpdate, registerSocketHandlers } from './sockets';
-
-const PORT = Number(process.env.PORT) || 4000;
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    liveFlights: config.aerodatabox.enabled,
+    liveTraffic: config.tomtom.enabled,
+  });
 });
 
 app.use('/flights', flightsRouter);
+app.use('/traffic', trafficRouter);
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -26,14 +33,24 @@ const io = new Server(httpServer, {
 
 registerSocketHandlers(io);
 
-const seeded = seedFlights(8);
-console.log(`Seeded ${seeded.length} mock flights:`, seeded.map((f) => f.flightNumber).join(', '));
-
-startSimulation((event) => {
+const emit = (event: Parameters<typeof broadcastFlightUpdate>[1]) => {
   broadcastFlightUpdate(io, event);
   console.log(`[${event.type}] ${event.message}`);
-});
+};
 
-httpServer.listen(PORT, () => {
-  console.log(`Airport lifecycle backend listening on http://localhost:${PORT}`);
+if (config.aerodatabox.enabled) {
+  console.log('AERODATABOX_API_KEY found — polling live BLR departures.');
+  startLivePolling(emit);
+} else {
+  console.log('AERODATABOX_API_KEY not set — running in DEMO mode with simulated BLR flights.');
+  seedDemoMode();
+  startDemoSimulation(emit);
+}
+
+if (!config.tomtom.enabled) {
+  console.log('TOMTOM_API_KEY not set — traffic estimates will use static typical durations.');
+}
+
+httpServer.listen(config.port, () => {
+  console.log(`Airport lifecycle backend (BLR) listening on http://localhost:${config.port}`);
 });

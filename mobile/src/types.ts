@@ -9,6 +9,8 @@ export type FlightStatus =
   | 'departed'
   | 'cancelled';
 
+export type DataSource = 'live' | 'demo';
+
 export interface CheckpointEstimate {
   name: string;
   estimatedWaitMinutes: number;
@@ -27,13 +29,15 @@ export interface FlightState {
   terminal: string;
   gate: string;
   boardingMethod: BoardingMethod;
-  boardingGroup: string;
+  boardingMethodConfidence: 'estimated' | 'confirmed';
   boardingStartTime: string;
+  boardingStartConfidence: 'estimated' | 'confirmed';
   checkpoints: {
     security: CheckpointEstimate;
     immigration?: CheckpointEstimate;
   };
   lastUpdated: string;
+  dataSource: DataSource;
 }
 
 export type FlightUpdateEventType =
@@ -66,4 +70,19 @@ export interface JourneyStage {
   detail: string;
   isActive: boolean;
   isDone: boolean;
+}
+
+export interface Locality {
+  id: string;
+  name: string;
+}
+
+export interface TrafficEstimate {
+  localityId: string;
+  localityName: string;
+  distanceKm: number;
+  durationMinutes: number;
+  typicalDurationMinutes: number;
+  delayMinutes: number;
+  dataSource: DataSource;
 }

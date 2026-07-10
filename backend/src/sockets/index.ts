@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { getFlightByNumber } from '../data/flights';
+import { getFlightByNumber } from '../data/flightSource';
 import { FlightUpdateEvent } from '../types';
 
 export function registerSocketHandlers(io: Server): void {

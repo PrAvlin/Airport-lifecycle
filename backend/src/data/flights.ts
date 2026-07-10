@@ -1,11 +1,12 @@
-import { v4 as uuid } from 'uuid';
-import { BoardingMethod, FlightState } from '../types';
+import { BLR_AIRPORT, BlrTerminal } from './airport';
+import { estimateBoardingMethod } from '../services/boardingHeuristic';
+import { estimateImmigrationWaitMinutes, estimateSecurityWaitMinutes } from '../services/waitTimeEstimate';
+import { FlightState } from '../types';
 
 const AIRLINES = ['IndiGo', 'Air India', 'Vistara', 'SpiceJet', 'Akasa Air'];
-const TERMINALS = ['T1', 'T2', 'T3'];
-const GATES = ['A1', 'A4', 'A12', 'B3', 'B7', 'C2', 'C9', 'D5'];
-const BOARDING_METHODS: BoardingMethod[] = ['jet_bridge', 'shuttle_bus', 'walk_to_aircraft'];
-const DESTINATIONS = ['BOM', 'BLR', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD'];
+const TERMINALS: BlrTerminal[] = ['T1', 'T2'];
+const GATES = ['1', '4', '12', '3', '7', '2', '9', '5'];
+const DESTINATIONS = ['BOM', 'DXB', 'SIN', 'LHR', 'MAA', 'HYD', 'DEL', 'PNQ'];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -27,67 +28,57 @@ function randomFlightNumber(airline: string): string {
   return `${prefix}${Math.floor(100 + Math.random() * 900)}`;
 }
 
+/**
+ * Demo-mode flights used only when AERODATABOX_API_KEY is not configured, so
+ * the app is still explorable before wiring up the real live data source.
+ * Every flight is tagged dataSource: 'demo' and the API surfaces that tag so
+ * the UI can show a clear "demo data" indicator rather than pretending it's live.
+ */
 export function createMockFlight(overrides: Partial<FlightState> = {}): FlightState {
   const airline = pick(AIRLINES);
   const destination = pick(DESTINATIONS);
   const isInternational = ['DXB', 'SIN', 'LHR'].includes(destination);
   const departureInMinutes = 45 + Math.floor(Math.random() * 120);
+  const terminal = pick(TERMINALS);
+  const gate = pick(GATES);
+  const flightNumber = randomFlightNumber(airline);
+  const estimatedDeparture = minutesFromNow(departureInMinutes);
+  const boardingLeadMinutes = isInternational ? 45 : 30;
+  const now = new Date();
 
   const flight: FlightState = {
-    id: uuid(),
-    flightNumber: randomFlightNumber(airline),
+    id: `${flightNumber}_${estimatedDeparture}`,
+    flightNumber,
     airline,
-    origin: 'DEL',
+    origin: BLR_AIRPORT.iata,
     destination,
     isInternational,
-    scheduledDeparture: minutesFromNow(departureInMinutes),
-    estimatedDeparture: minutesFromNow(departureInMinutes),
+    scheduledDeparture: estimatedDeparture,
+    estimatedDeparture,
     status: 'scheduled',
-    terminal: pick(TERMINALS),
-    gate: pick(GATES),
-    boardingMethod: pick(BOARDING_METHODS),
-    boardingGroup: pick(['A', 'B', 'C', '1', '2', '3']),
-    boardingStartTime: minutesFromNow(departureInMinutes - 30),
+    terminal,
+    gate,
+    boardingMethod: estimateBoardingMethod(terminal, gate, flightNumber),
+    boardingMethodConfidence: 'estimated',
+    boardingStartTime: minutesFromNow(departureInMinutes - boardingLeadMinutes),
+    boardingStartConfidence: 'estimated',
     checkpoints: {
-      security: { name: 'Security Checkpoint 2', estimatedWaitMinutes: 5 + Math.floor(Math.random() * 25) },
+      security: { name: `${terminal} Security Checkpoint`, estimatedWaitMinutes: estimateSecurityWaitMinutes(now) },
       ...(isInternational
-        ? { immigration: { name: 'Immigration Counter B', estimatedWaitMinutes: 5 + Math.floor(Math.random() * 20) } }
+        ? { immigration: { name: `${terminal} Immigration (Departures)`, estimatedWaitMinutes: estimateImmigrationWaitMinutes(now) } }
         : {}),
     },
     lastUpdated: new Date().toISOString(),
+    dataSource: 'demo',
   };
 
   return { ...flight, ...overrides };
 }
 
-const flightStore = new Map<string, FlightState>();
-
-export function seedFlights(count = 8): FlightState[] {
+export function seedDemoFlights(count = 8): FlightState[] {
   const flights: FlightState[] = [];
   for (let i = 0; i < count; i++) {
-    const flight = createMockFlight();
-    flightStore.set(flight.flightNumber, flight);
-    flights.push(flight);
+    flights.push(createMockFlight());
   }
   return flights;
-}
-
-export function getFlightByNumber(flightNumber: string): FlightState | undefined {
-  return flightStore.get(flightNumber.toUpperCase());
-}
-
-export function listFlights(): FlightState[] {
-  return Array.from(flightStore.values());
-}
-
-export function updateFlight(flightNumber: string, patch: Partial<FlightState>): FlightState | undefined {
-  const existing = flightStore.get(flightNumber.toUpperCase());
-  if (!existing) return undefined;
-  const updated: FlightState = { ...existing, ...patch, lastUpdated: new Date().toISOString() };
-  flightStore.set(flightNumber.toUpperCase(), updated);
-  return updated;
-}
-
-export function getFlightStore() {
-  return flightStore;
 }

@@ -32,7 +32,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'security',
         label: 'Security screening',
-        detail: `${flight.checkpoints.security.name} · ~${flight.checkpoints.security.estimatedWaitMinutes} min wait`,
+        detail: `${flight.checkpoints.security.name} · ~${flight.checkpoints.security.estimatedWaitMinutes} min typical wait`,
         isDone: minutesToBoarding < 20,
         isActive: minutesToBoarding >= 20 && minutesToBoarding < 60,
       },
@@ -42,7 +42,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       stages.push({
         id: 'immigration',
         label: 'Immigration',
-        detail: `${flight.checkpoints.immigration.name} · ~${flight.checkpoints.immigration.estimatedWaitMinutes} min wait`,
+        detail: `${flight.checkpoints.immigration.name} · ~${flight.checkpoints.immigration.estimatedWaitMinutes} min typical wait`,
         isDone: minutesToBoarding < 15,
         isActive: minutesToBoarding >= 15 && minutesToBoarding < 20,
       });
@@ -52,14 +52,16 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'gate_area',
         label: `Gate ${flight.gate} area`,
-        detail: `Terminal ${flight.terminal} · Boarding group ${flight.boardingGroup}`,
+        detail: `Terminal ${flight.terminal}${flight.gate === 'TBD' ? ' · Gate not yet assigned' : ''}`,
         isDone: isBoardingOrLater,
         isActive: !isBoardingOrLater && minutesToBoarding < 15,
       },
       {
         id: 'boarding',
         label: 'Boarding',
-        detail: boardingMethodLabel(flight.boardingMethod),
+        detail:
+          boardingMethodLabel(flight.boardingMethod) +
+          (flight.boardingMethodConfidence === 'estimated' ? ' (estimated — confirm at your gate display)' : ''),
         isDone: flight.status === 'gate_closed' || isDeparted,
         isActive: isBoardingOrLater && !isDeparted,
       },

@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { FlightState } from '../types';
+import { FlightState, Locality, TrafficEstimate } from '../types';
 
 function resolveApiBaseUrl(): string {
   const fromExtra = Constants.expoConfig?.extra?.apiBaseUrl as string | undefined;
@@ -23,4 +23,21 @@ export async function fetchAllFlights(): Promise<FlightState[]> {
   if (!res.ok) throw new Error('Failed to load flights');
   const body = await res.json();
   return body.flights as FlightState[];
+}
+
+export async function fetchLocalities(): Promise<Locality[]> {
+  const res = await fetch(`${API_BASE_URL}/traffic/localities`);
+  if (!res.ok) throw new Error('Failed to load localities');
+  const body = await res.json();
+  return body.localities as Locality[];
+}
+
+export async function fetchTraffic(localityId: string): Promise<TrafficEstimate> {
+  const res = await fetch(`${API_BASE_URL}/traffic/${encodeURIComponent(localityId)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `Failed to load traffic for ${localityId}`);
+  }
+  const body = await res.json();
+  return body.traffic as TrafficEstimate;
 }

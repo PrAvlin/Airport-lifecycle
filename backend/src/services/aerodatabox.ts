@@ -181,7 +181,11 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurns: Map<string, QuickTurn
     arrival: {
       airportIata: destinationIata,
       airportName: raw.arrival?.airport?.name ?? destinationProfile.name,
-      airportCity: raw.arrival?.airport?.municipalityName ?? destinationProfile.city,
+      // AeroDataBox doesn't always publish a city name for smaller regional
+      // airports outside our curated list - fall back to the airport's own
+      // name, and only as a last resort the bare IATA code, rather than a
+      // vague placeholder phrase.
+      airportCity: raw.arrival?.airport?.municipalityName ?? raw.arrival?.airport?.name ?? destinationIata,
       terminal: arrivalTerminal,
       gate: arrivalGate,
       timezone: destinationProfile.timezone,

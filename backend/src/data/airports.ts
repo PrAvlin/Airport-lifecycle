@@ -164,8 +164,8 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 160,
     terminals: {
-      T1: { aerobridgeShare: 0.5, reason: 'T1 (budget domestic) mixes aerobridge gates with ground-level bus gates.' },
-      T3: { aerobridgeShare: 0.9, reason: 'T3 is a modern, mostly aerobridge-served terminal.' },
+      T1: { aerobridgeShare: 0.5, reason: 'T1 (budget domestic) confirmed to use bus boarding for at least part of its gates; exact split not published.' },
+      T3: { aerobridgeShare: 0.47, reason: 'T3 has 48 contact stands (78 aerobridges, some wide-body stands use two) alongside 54 remote parking bays — under half the total stands are actually contact.' },
     },
     defaultTerminal: 'T3',
     gateRules: [],
@@ -187,11 +187,14 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 95,
     terminals: {
-      T1: { aerobridgeShare: 0.4, reason: 'T1 (older domestic terminal) uses more remote stands reached by bus.' },
-      T2: { aerobridgeShare: 0.85, reason: 'T2 is a modern integrated terminal, mostly aerobridge-served.' },
+      T1: { aerobridgeShare: 0.4, reason: 'T1 has 11 boarding bridges across its 1A/1B/1C piers, with confirmed bus boarding at some gates (see gate map for the 1C pier specifically).' },
+      T2: { aerobridgeShare: 0.85, reason: 'T2 was built with 48 contact stands (52 aerobridges) in its original design — a mostly-aerobridge terminal.' },
     },
     defaultTerminal: 'T2',
-    gateRules: [],
+    gateRules: [
+      { terminal: 'T1', gates: ['21', '22', '23', '24', '25'], method: 'aerobridge', probability: 0.9, note: 'is an aerobridge gate on the T1C pier' },
+      { terminal: 'T1', gates: ['29', '30', '31'], method: 'shuttle_bus', probability: 0.9, note: 'is a bus-boarding gate on the T1C pier' },
+    ],
     localities: [
       { id: 'bandra', name: 'Bandra', latitude: 19.0596, longitude: 72.8295, typicalMinutesNoTraffic: 25 },
       { id: 'andheri', name: 'Andheri', latitude: 19.1197, longitude: 72.8468, typicalMinutesNoTraffic: 15 },
@@ -210,7 +213,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 60,
     terminals: {
-      T1: { aerobridgeShare: 0.85, reason: 'A single modern terminal that is predominantly aerobridge-served.' },
+      T1: { aerobridgeShare: 0.44, reason: 'The terminal has 44 aerobridges against 56 remote bus-boarding domestic gates — under half of gates are contact.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -231,8 +234,11 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 150,
     terminals: {
-      T1: { aerobridgeShare: 0.55, reason: 'Domestic terminal mixes aerobridge and ground-level bus gates.' },
-      T2: { aerobridgeShare: 0.8, reason: 'International terminal is mostly aerobridge-served.' },
+      // Kolkata actually runs one single integrated terminal (T2) for both
+      // domestic and international - 18 aerobridges against 57 remote
+      // parking bays, so contact stands are a clear minority (~24%).
+      T1: { aerobridgeShare: 0.24, reason: 'Kolkata is one single integrated terminal with 18 aerobridges against 57 remote parking bays — most stands are remote.' },
+      T2: { aerobridgeShare: 0.24, reason: 'Kolkata is one single integrated terminal with 18 aerobridges against 57 remote parking bays — most stands are remote.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -253,7 +259,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 80,
     terminals: {
-      T1: { aerobridgeShare: 0.45, reason: 'A smaller terminal with a mix of aerobridge and remote stands.' },
+      T1: { aerobridgeShare: 0.75, reason: 'All 10 of Pune\'s aerobridges are now operational (5 new terminal + 5 old), which recently eliminated most routine bus boarding.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -274,8 +280,8 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 90,
     terminals: {
-      T1: { aerobridgeShare: 0.5, reason: 'Domestic terminal mixes aerobridge and ground-level bus gates.' },
-      T2: { aerobridgeShare: 0.75, reason: 'Renovated international terminal, mostly aerobridge-served.' },
+      T1: { aerobridgeShare: 0.35, reason: 'The domestic terminal has only 4 aerobridges total, so most gates are reached by bus.' },
+      T2: { aerobridgeShare: 0.55, reason: 'The international terminal also has just 4 aerobridges, similarly bus-heavy.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -295,7 +301,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 130,
     terminals: {
-      T1: { aerobridgeShare: 0.35, reason: 'A smaller airport that relies mostly on remote stands reached by bus.' },
+      T1: { aerobridgeShare: 0.45, reason: '8 aerobridges are currently operational, out of a planned eventual 16 — call it a coin flip today.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -315,7 +321,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 100,
     terminals: {
-      T1: { aerobridgeShare: 0.55, reason: 'Domestic terminal mixes aerobridge and remote stands.' },
+      T1: { aerobridgeShare: 0.45, reason: 'The domestic terminal (renovated 2018) has 7 aerobridges against a larger total gate count, so remote stands are still common.' },
       T3: { aerobridgeShare: 0.85, reason: 'The newer international terminal is mostly aerobridge-served.' },
     },
     defaultTerminal: 'T1',
@@ -336,7 +342,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 75,
     terminals: {
-      T2: { aerobridgeShare: 0.45, reason: 'A smaller terminal with a mix of aerobridge and remote stands.' },
+      T2: { aerobridgeShare: 0.4, reason: 'The domestic terminal has 10 boarding gates but only a handful of aerobridges (more being added), so most gates are still bus-boarded.' },
     },
     defaultTerminal: 'T2',
     gateRules: [],
@@ -356,7 +362,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 100,
     terminals: {
-      T3: { aerobridgeShare: 0.5, reason: 'A mix of aerobridge and ground-level bus gates.' },
+      T3: { aerobridgeShare: 0.4, reason: 'Around 6 aerobridges (expanding to 8) against at least 15 departure gates — most gates are still bus-boarded.' },
     },
     defaultTerminal: 'T3',
     gateRules: [],

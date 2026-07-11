@@ -83,6 +83,10 @@ export function JourneyScreen({ route }: Props) {
           </Text>
         </View>
         <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Arrival time</Text>
+          <Text style={styles.infoValue}>{formatTime(flight.arrival.estimatedArrival)}</Text>
+        </View>
+        <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Arrival terminal / gate</Text>
           <Text style={styles.infoValue}>
             {flight.arrival.terminal === 'TBD' ? 'TBD' : flight.arrival.terminal} ·{' '}

@@ -159,7 +159,8 @@ export function SearchScreen({ navigation }: Props) {
                   </Text>
                 </View>
                 <Text style={styles.cardRoute}>
-                  → {item.arrival.airportCity} · {formatTime(item.estimatedDeparture)} · {item.airline}
+                  → {item.arrival.airportCity} · Dep {formatTime(item.estimatedDeparture)} · Arr{' '}
+                  {formatTime(item.arrival.estimatedArrival)} · {item.airline}
                 </Text>
               </View>
               <View style={styles.cardGateBox}>

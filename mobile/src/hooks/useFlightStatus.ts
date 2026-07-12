@@ -40,7 +40,7 @@ export function useFlightStatus(flightNumber: string | null, airport: string): U
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('subscribe', flightNumber);
+      socket.emit('subscribe', { flightNumber, airport });
     });
 
     socket.on('flight:snapshot', (payload: { flight: FlightState }) => {
@@ -56,7 +56,7 @@ export function useFlightStatus(flightNumber: string | null, airport: string): U
 
     return () => {
       cancelled = true;
-      socket.emit('unsubscribe', flightNumber);
+      socket.emit('unsubscribe', { flightNumber, airport });
       socket.disconnect();
       socketRef.current = null;
     };

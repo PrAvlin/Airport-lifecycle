@@ -48,18 +48,37 @@ export function SearchScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
+    // Guards against a slow, now-stale request (e.g. from an airport/mode the
+    // user has already switched away from) resolving after a newer one and
+    // clobbering the list with out-of-date data.
+    let cancelled = false;
     setLoading(true);
     if (mode === 'departures') {
       fetchAllFlights(selectedAirport)
-        .then(setFlights)
-        .catch(() => setFlights([]))
-        .finally(() => setLoading(false));
+        .then((data) => {
+          if (!cancelled) setFlights(data);
+        })
+        .catch(() => {
+          if (!cancelled) setFlights([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     } else {
       fetchAllArrivals(selectedAirport)
-        .then(setArrivals)
-        .catch(() => setArrivals([]))
-        .finally(() => setLoading(false));
+        .then((data) => {
+          if (!cancelled) setArrivals(data);
+        })
+        .catch(() => {
+          if (!cancelled) setArrivals([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [selectedAirport, mode]);
 
   const filteredFlights = flights.filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()));

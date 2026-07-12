@@ -1,6 +1,6 @@
 const IST_TIME_ZONE = 'Asia/Kolkata';
 
-/** All three origin airports (BLR/MAA/CJB) are IST — show departure-side times explicitly in IST, regardless of the viewing device's own timezone. */
+/** Every supported airport is in India (IST) — show departure-side times explicitly in IST, regardless of the viewing device's own timezone. */
 export function formatIstTime(iso: string | Date): string {
   const time = new Date(iso).toLocaleTimeString([], {
     hour: '2-digit',

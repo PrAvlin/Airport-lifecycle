@@ -43,10 +43,17 @@ function tickFlight(flight: FlightState, emit: EventEmitter): void {
     const delayMinutes = 10 + Math.floor(Math.random() * 20);
     const newDeparture = new Date(new Date(flight.estimatedDeparture).getTime() + delayMinutes * 60_000).toISOString();
     const newBoarding = new Date(new Date(flight.boardingStartTime).getTime() + delayMinutes * 60_000).toISOString();
+    // A later departure means a later landing too - without shifting this,
+    // the flight's displayed duration/arrival time would go stale (or even
+    // shrink) every time a delay lands.
+    const newArrival = new Date(
+      new Date(flight.arrival.estimatedArrival).getTime() + delayMinutes * 60_000,
+    ).toISOString();
     const updated = patchDemoFlight(flight.origin, flight.flightNumber, {
       status: 'delayed',
       estimatedDeparture: newDeparture,
       boardingStartTime: newBoarding,
+      arrival: { ...flight.arrival, estimatedArrival: newArrival },
     });
     if (updated) emitUpdate(emit, 'delay', updated, `${flight.flightNumber} delayed by ${delayMinutes} minutes`);
     return;

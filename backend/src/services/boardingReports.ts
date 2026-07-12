@@ -35,10 +35,16 @@ export function submitReport(
   flightCounts[method] = (flightCounts[method] ?? 0) + 1;
   flightReports.set(fKey, flightCounts);
 
-  const aKey = airportKey(airportIata, phase);
-  const airportCounts = { ...(airportReports.get(aKey) ?? {}) };
-  airportCounts[method] = (airportCounts[method] ?? 0) + 1;
-  airportReports.set(aKey, airportCounts);
+  // 'N/A' means AeroDataBox never published a destination for this flight -
+  // tallying it would pollute the cross-flight consensus pool under a bogus
+  // airport key that no real query ever matches, so it only gets the
+  // per-flight tally above (still enough for that exact flight to lock in).
+  if (airportIata && airportIata !== 'N/A') {
+    const aKey = airportKey(airportIata, phase);
+    const airportCounts = { ...(airportReports.get(aKey) ?? {}) };
+    airportCounts[method] = (airportCounts[method] ?? 0) + 1;
+    airportReports.set(aKey, airportCounts);
+  }
 
   return flightCounts;
 }

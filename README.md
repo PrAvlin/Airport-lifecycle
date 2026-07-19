@@ -83,6 +83,19 @@ in priority order:
    specific flight, it locks in as `confirmed` — and also adds to that
    airport's crowd-consensus pool above.
 
+   Because this is the one place an unauthenticated caller can change what
+   every other user sees, reports are deduplicated per (reporter, flight,
+   phase) rather than raw-counted — otherwise a single caller could hit the
+   endpoint 3 times and force *any* flight to `confirmed` with a false
+   answer. The reporter identity is the caller's IP address (an imperfect,
+   account-free proxy — see `backend/src/services/boardingReports.ts`), and
+   report endpoints are additionally rate-limited to 10 requests/minute per
+   IP (`backend/src/middleware/reportRateLimit.ts`). The airport-level
+   consensus pool is persisted to a flat JSON file
+   (`backend/.data/airport-reports.json`) so it survives a server
+   restart/redeploy — it's explicitly meant to accumulate across days, so an
+   in-memory-only version would quietly reset that promise every deploy.
+
 These combine into one of three confidence levels, and the app's behavior
 changes with it — not just the caption. In every case the estimate commits
 to a single method (aerobridge **or** shuttle bus, never "could be

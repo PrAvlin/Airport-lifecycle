@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ensureFreshFlights, getArrivalByNumber, getSourceMeta, listArrivals, reportArrivalMethod } from '../data/flightSource';
 import { isKnownOrigin } from '../data/airports';
+import { reportRateLimit } from '../middleware/reportRateLimit';
 import { BoardingMethod } from '../types';
 
 export const arrivalsRouter = Router();
@@ -34,14 +35,15 @@ arrivalsRouter.get('/:flightNumber', async (req, res) => {
  * they actually saw deplaning. Feeds the same per-airport consensus pool as
  * reports made from the departures side (see methodEstimate.ts).
  */
-arrivalsRouter.post('/:flightNumber/deplane-report', (req, res) => {
+arrivalsRouter.post('/:flightNumber/deplane-report', reportRateLimit, (req, res) => {
   const { method, airport } = req.body ?? {};
   if (!VALID_METHODS.includes(method)) {
     res.status(400).json({ error: `method must be one of ${VALID_METHODS.join(', ')}` });
     return;
   }
 
-  const arrival = reportArrivalMethod(req.params.flightNumber, method, airportParam(airport));
+  const reporterId = req.ip ?? 'unknown';
+  const arrival = reportArrivalMethod(req.params.flightNumber, method, reporterId, airportParam(airport));
   if (!arrival) {
     res.status(404).json({ error: `Flight ${req.params.flightNumber} not found among today's arrivals` });
     return;

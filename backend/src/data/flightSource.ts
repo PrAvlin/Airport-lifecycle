@@ -222,13 +222,14 @@ export function reportBoardingMethod(
   flightNumber: string,
   phase: ReportPhase,
   method: Parameters<typeof submitReport>[2],
+  reporterId: string,
   originIata?: string,
 ): FlightState | undefined {
   const flight = getFlightByNumber(flightNumber, originIata);
   if (!flight) return undefined;
 
   const relevantAirport = phase === 'board' ? flight.origin : flight.destination;
-  submitReport(flight.id, phase, method, relevantAirport);
+  submitReport(flight.id, phase, method, relevantAirport, reporterId);
   const nextEstimate = recomputeEstimate(flight.id, phase);
   if (!nextEstimate) return flight;
 
@@ -262,12 +263,13 @@ export function reportBoardingMethod(
 export function reportArrivalMethod(
   flightNumber: string,
   method: BoardingMethod,
+  reporterId: string,
   destinationIata?: string,
 ): ArrivalFlightState | undefined {
   const arrival = getArrivalByNumber(flightNumber, destinationIata);
   if (!arrival) return undefined;
 
-  submitReport(arrival.id, 'deplane', method, arrival.destination);
+  submitReport(arrival.id, 'deplane', method, arrival.destination, reporterId);
   const nextEstimate = recomputeEstimate(arrival.id, 'deplane');
   if (!nextEstimate) return arrival;
 

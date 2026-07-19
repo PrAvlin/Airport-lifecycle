@@ -13,6 +13,12 @@ import { startLivePolling } from './polling/livePoller';
 import { broadcastFlightUpdate, registerSocketHandlers } from './sockets';
 
 const app = express();
+// This app is meant to run behind a Codespaces-forwarded port or an ngrok
+// tunnel (see README) - without this, req.ip resolves to the tunnel's own
+// address for every request, so every passenger would look like the same
+// reporter to the crowd-report dedup/rate-limit (see boardingReports.ts and
+// reportRateLimit.ts), silently capping real consensus at ~1 effective vote.
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json());
 

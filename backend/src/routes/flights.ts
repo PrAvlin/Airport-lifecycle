@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ensureFreshFlights, getFlightByNumber, getSourceMeta, listFlights, reportBoardingMethod } from '../data/flightSource';
 import { isKnownOrigin } from '../data/airports';
+import { reportRateLimit } from '../middleware/reportRateLimit';
 import { BoardingMethod } from '../types';
 
 export const flightsRouter = Router();
@@ -34,7 +35,7 @@ flightsRouter.get('/:flightNumber', async (req, res) => {
  * (boarding or deplaning) for this specific flight. Once enough independent
  * reports agree, it's locked in as confirmed and stops being an estimate.
  */
-flightsRouter.post('/:flightNumber/boarding-report', (req, res) => {
+flightsRouter.post('/:flightNumber/boarding-report', reportRateLimit, (req, res) => {
   const { phase, method, airport } = req.body ?? {};
   if (phase !== 'board' && phase !== 'deplane') {
     res.status(400).json({ error: "phase must be 'board' or 'deplane'" });
@@ -45,7 +46,8 @@ flightsRouter.post('/:flightNumber/boarding-report', (req, res) => {
     return;
   }
 
-  const flight = reportBoardingMethod(req.params.flightNumber, phase, method, airportParam(airport));
+  const reporterId = req.ip ?? 'unknown';
+  const flight = reportBoardingMethod(req.params.flightNumber, phase, method, reporterId, airportParam(airport));
   if (!flight) {
     res.status(404).json({ error: `Flight ${req.params.flightNumber} not found among today's departures` });
     return;

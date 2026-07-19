@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { submitBoardingReport, submitDeplaneReport } from '../api/client';
-import { BoardingMethod } from '../types';
+import { BoardingMethod, MethodEstimate } from '../types';
 import { colors } from '../theme';
 
 interface Props {
@@ -10,6 +10,13 @@ interface Props {
   phase: 'board' | 'deplane';
   /** Arrivals-list flights use a separate endpoint (no 'phase' body field - it's always deplaning). */
   source?: 'flight' | 'arrival';
+  /**
+   * Called with the freshly-recomputed estimate right after a successful
+   * submit, so the parent screen can update its badge immediately instead of
+   * leaving the passenger looking at their OLD estimate until the next poll -
+   * which reads as "did my report even do anything?".
+   */
+  onReported?: (estimate: MethodEstimate) => void;
 }
 
 const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
@@ -17,7 +24,7 @@ const OPTIONS: { method: BoardingMethod; label: string; icon: string }[] = [
   { method: 'shuttle_bus', label: 'Shuttle', icon: '🚌' },
 ];
 
-export function BoardingReportPrompt({ flightNumber, airport, phase, source = 'flight' }: Props) {
+export function BoardingReportPrompt({ flightNumber, airport, phase, source = 'flight', onReported }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -25,9 +32,11 @@ export function BoardingReportPrompt({ flightNumber, airport, phase, source = 'f
     setSubmitting(true);
     try {
       if (source === 'arrival') {
-        await submitDeplaneReport(flightNumber, method, airport);
+        const arrival = await submitDeplaneReport(flightNumber, method, airport);
+        onReported?.(arrival.disembark);
       } else {
-        await submitBoardingReport(flightNumber, phase, method, airport);
+        const flight = await submitBoardingReport(flightNumber, phase, method, airport);
+        onReported?.(phase === 'board' ? flight.boarding : flight.arrival.disembark);
       }
       setSubmitted(true);
     } catch {

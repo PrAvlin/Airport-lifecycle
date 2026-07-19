@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useArrivalStatus } from '../hooks/useArrivalStatus';
 import { DataSourceBadge } from '../components/DataSourceBadge';
@@ -20,9 +20,9 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function ArrivalScreen({ route }: Props) {
+export function ArrivalScreen({ route, navigation }: Props) {
   const { flightNumber, airport } = route.params;
-  const { arrival, loading, error } = useArrivalStatus(flightNumber, airport);
+  const { arrival, loading, error, setArrival } = useArrivalStatus(flightNumber, airport);
 
   if (loading && !arrival) {
     return (
@@ -36,6 +36,9 @@ export function ArrivalScreen({ route }: Props) {
     return (
       <View style={styles.centered}>
         <Text style={styles.error}>{error}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Back to search</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -61,7 +64,7 @@ export function ArrivalScreen({ route }: Props) {
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Arrival terminal / gate</Text>
           <Text style={styles.infoValue}>
-            {arrival.terminal === 'TBD' ? 'TBD' : arrival.terminal} ·{' '}
+            {arrival.terminal === 'TBD' ? 'Not yet published' : arrival.terminal} ·{' '}
             {arrival.gate === 'TBD' ? 'Not yet published' : arrival.gate}
           </Text>
         </View>
@@ -97,6 +100,7 @@ export function ArrivalScreen({ route }: Props) {
         airport={airport}
         phase="deplane"
         source="arrival"
+        onReported={(disembark) => setArrival({ ...arrival, disembark })}
       />
     </ScrollView>
   );
@@ -106,6 +110,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   error: { color: colors.danger, fontSize: 15, padding: 20, textAlign: 'center' },
+  backButton: {
+    marginTop: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  backButtonText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   flightNumber: { color: colors.textPrimary, fontSize: 30, fontWeight: '700' },
   status: { fontSize: 15, fontWeight: '700' },

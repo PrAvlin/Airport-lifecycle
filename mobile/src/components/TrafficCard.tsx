@@ -19,6 +19,10 @@ const formatTime = formatIstTime;
 export function TrafficCard({ flight, localities, selectedId, onSelect, estimate, loading }: Props) {
   const leaveBy = estimate ? computeLeaveByTime(flight, estimate) : null;
   const hasDelay = estimate && estimate.delayMinutes > 5;
+  // A recommendation to "leave by" a clock time that has already passed reads
+  // as broken rather than urgent - a passenger checking this late needs to be
+  // told to leave now, not shown a time that's behind them with no context.
+  const isOverdue = leaveBy ? leaveBy.getTime() <= Date.now() : false;
 
   return (
     <View style={styles.card}>
@@ -52,11 +56,15 @@ export function TrafficCard({ flight, localities, selectedId, onSelect, estimate
             <Text style={styles.value}>{estimate.distanceKm} km</Text>
           </View>
           {leaveBy && (
-            <View style={styles.leaveByBox}>
-              <Text style={styles.leaveByLabel}>Leave home by</Text>
-              <Text style={styles.leaveByValue}>{formatTime(leaveBy)}</Text>
+            <View style={[styles.leaveByBox, isOverdue && styles.leaveByBoxUrgent]}>
+              <Text style={styles.leaveByLabel}>{isOverdue ? "You're cutting it close" : 'Leave home by'}</Text>
+              <Text style={[styles.leaveByValue, isOverdue && styles.leaveByValueUrgent]}>
+                {isOverdue ? 'Leave now' : formatTime(leaveBy)}
+              </Text>
               <Text style={styles.leaveByHint}>
-                Based on drive time, typical security wait, and boarding start.
+                {isOverdue
+                  ? `Recommended departure (${formatTime(leaveBy)}) has already passed - head out immediately.`
+                  : 'Based on drive time, typical security wait, and boarding start.'}
               </Text>
             </View>
           )}
@@ -89,7 +97,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
   },
+  leaveByBoxUrgent: { borderWidth: 1, borderColor: colors.danger },
   leaveByLabel: { color: colors.textSecondary, fontSize: 12 },
   leaveByValue: { color: colors.accent, fontSize: 22, fontWeight: '700', marginTop: 2 },
+  leaveByValueUrgent: { color: colors.danger },
   leaveByHint: { color: colors.textSecondary, fontSize: 11, marginTop: 4 },
 });

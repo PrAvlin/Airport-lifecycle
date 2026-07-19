@@ -9,6 +9,8 @@ interface UseFlightStatusResult {
   loading: boolean;
   error: string | null;
   lastEvent: FlightUpdateEvent | null;
+  /** Lets a caller (e.g. after submitting a crowd report) apply a fresher flight immediately, without waiting on the socket/poll. */
+  setFlight: (flight: FlightState) => void;
 }
 
 export function useFlightStatus(flightNumber: string | null, airport: string): UseFlightStatusResult {
@@ -62,5 +64,5 @@ export function useFlightStatus(flightNumber: string | null, airport: string): U
     };
   }, [flightNumber, airport]);
 
-  return { flight, loading, error, lastEvent };
+  return { flight, loading, error, lastEvent, setFlight };
 }

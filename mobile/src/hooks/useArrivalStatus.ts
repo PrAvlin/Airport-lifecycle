@@ -6,6 +6,8 @@ interface UseArrivalStatusResult {
   arrival: ArrivalFlightState | null;
   loading: boolean;
   error: string | null;
+  /** Lets a caller (e.g. after submitting a crowd report) apply a fresher arrival immediately, without waiting for the next poll. */
+  setArrival: (arrival: ArrivalFlightState) => void;
 }
 
 // Arrivals have no socket push (see flightSource.ts's applyLiveArrivalSnapshot),
@@ -48,5 +50,5 @@ export function useArrivalStatus(flightNumber: string | null, airport: string): 
     };
   }, [flightNumber, airport]);
 
-  return { arrival, loading, error };
+  return { arrival, loading, error, setArrival };
 }

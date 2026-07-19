@@ -12,6 +12,8 @@ interface Props {
   airport: string;
   phase: 'board' | 'deplane';
   source?: 'flight' | 'arrival';
+  /** Lets the parent screen apply the freshly-recomputed estimate immediately after a report is submitted. */
+  onReported?: (estimate: MethodEstimate) => void;
 }
 
 /**
@@ -21,7 +23,7 @@ interface Props {
  * and a way to help resolve it, because a wrong confident answer is worse
  * than an honest "we don't know yet."
  */
-export function MethodEstimateCard({ title, estimate, flightNumber, airport, phase, source = 'flight' }: Props) {
+export function MethodEstimateCard({ title, estimate, flightNumber, airport, phase, source = 'flight', onReported }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -41,7 +43,13 @@ export function MethodEstimateCard({ title, estimate, flightNumber, airport, pha
           <Text style={styles.likelyNote}>
             ~{Math.round(estimate.probability * 100)}% likely, not yet confirmed — {estimate.reasoning[0]}
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} source={source} />
+          <BoardingReportPrompt
+            flightNumber={flightNumber}
+            airport={airport}
+            phase={phase}
+            source={source}
+            onReported={onReported}
+          />
         </>
       )}
 
@@ -60,7 +68,13 @@ export function MethodEstimateCard({ title, estimate, flightNumber, airport, pha
             Come prepared for either: wear comfortable shoes, keep essentials within reach, and budget a few extra
             minutes just in case it's a bus.
           </Text>
-          <BoardingReportPrompt flightNumber={flightNumber} airport={airport} phase={phase} source={source} />
+          <BoardingReportPrompt
+            flightNumber={flightNumber}
+            airport={airport}
+            phase={phase}
+            source={source}
+            onReported={onReported}
+          />
         </View>
       )}
     </View>

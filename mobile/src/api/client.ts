@@ -76,12 +76,22 @@ export async function fetchArrival(flightNumber: string, airport: string): Promi
   return body.arrival as ArrivalFlightState;
 }
 
-export async function submitDeplaneReport(flightNumber: string, method: BoardingMethod, airport: string): Promise<void> {
-  await fetchWithTimeout(`${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}/deplane-report`, {
+// Both report endpoints echo back the freshly-recomputed flight/arrival so
+// the caller can update its on-screen estimate immediately, rather than
+// leaving the passenger looking at a stale badge until the next poll -
+// submitting a report with no visible effect reads as "did that even work?".
+export async function submitDeplaneReport(
+  flightNumber: string,
+  method: BoardingMethod,
+  airport: string,
+): Promise<ArrivalFlightState> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}/deplane-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method, airport }),
   });
+  const body = await res.json();
+  return body.arrival as ArrivalFlightState;
 }
 
 export async function submitBoardingReport(
@@ -89,12 +99,14 @@ export async function submitBoardingReport(
   phase: 'board' | 'deplane',
   method: BoardingMethod,
   airport: string,
-): Promise<void> {
-  await fetchWithTimeout(`${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`, {
+): Promise<FlightState> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phase, method, airport }),
   });
+  const body = await res.json();
+  return body.flight as FlightState;
 }
 
 export async function fetchLocalities(airport: string): Promise<Locality[]> {

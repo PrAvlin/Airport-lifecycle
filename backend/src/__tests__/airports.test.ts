@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ORIGIN_AIRPORTS } from '../data/airports';
+import { ORIGIN_AIRPORTS, getOriginAirport, findGateRule } from '../data/airports';
 
 // Turns the one-off validation script (run manually during a prior QC pass)
 // into a permanent regression check, so a future edit to airports.ts that
@@ -73,5 +73,34 @@ describe('airport data integrity', () => {
     for (const iata of ['BLR', 'MAA', 'CJB']) {
       assert.ok(ORIGIN_AIRPORTS[iata], `expected ${iata} in ORIGIN_AIRPORTS`);
     }
+  });
+});
+
+describe('researched gate rules for specific airports', () => {
+  test("DEL T3: domestic gate range 27-62 is aerobridge, except the two published bus-gate exceptions", () => {
+    const del = getOriginAirport('DEL');
+    assert.equal(findGateRule(del, 'T3', '30')?.method, 'aerobridge');
+    assert.equal(findGateRule(del, 'T3', '27')?.method, 'aerobridge');
+    assert.equal(findGateRule(del, 'T3', '62')?.method, 'aerobridge');
+    assert.equal(findGateRule(del, 'T3', '42')?.method, 'shuttle_bus');
+    assert.equal(findGateRule(del, 'T3', '44')?.method, 'shuttle_bus');
+    // Outside the published domestic range (e.g. the international side) - no rule, falls back to the terminal profile.
+    assert.equal(findGateRule(del, 'T3', '5'), undefined);
+  });
+
+  test('HYD T1: gate numbering convention - two digits is aerobridge, three digits is bus', () => {
+    const hyd = getOriginAirport('HYD');
+    assert.equal(findGateRule(hyd, 'T1', '10')?.method, 'aerobridge');
+    assert.equal(findGateRule(hyd, 'T1', '99')?.method, 'aerobridge');
+    assert.equal(findGateRule(hyd, 'T1', '100')?.method, 'shuttle_bus');
+    assert.equal(findGateRule(hyd, 'T1', '399')?.method, 'shuttle_bus');
+    // A single-digit gate number doesn't match either published pattern.
+    assert.equal(findGateRule(hyd, 'T1', '5'), undefined);
+  });
+
+  test('COK: T2 (the newer all-remote domestic terminal) is registered alongside T1 and T3', () => {
+    const cok = getOriginAirport('COK');
+    assert.ok(cok.terminals.T2, 'expected a T2 entry for COK');
+    assert.ok(cok.terminals.T2.aerobridgeShare < 0.5, 'T2 is described as all-remote, so its aerobridgeShare should be low');
   });
 });

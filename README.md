@@ -52,12 +52,16 @@ in priority order:
 
 1. **Gate-level knowledge (strongest signal).** The physical layout gives
    it away: a ground-level gate cannot have an aerobridge, while an
-   upper-level gate almost always does. Real, curated gate maps exist for
-   BLR and BOM so far (`backend/src/data/airports.ts`) — e.g. BLR T1 gates
-   1–2/12–18/28–43 are upper-level aerobridge gates while 3–9/19–25 are
-   ground-level bus gates. When the gate is known, this replaces the
-   terminal-wide average at ~0.9–0.95 probability, for **both** the
-   departing flight boarding there and any arriving flight deplaning there.
+   upper-level gate almost always does. Real, curated gate rules exist for
+   BLR, CJB, BOM, DEL (T3 domestic only), and HYD so far
+   (`backend/src/data/airports.ts`) — e.g. BLR T1 gates 1–2/12–18/28–43 are
+   upper-level aerobridge gates while 3–9/19–25 are ground-level bus gates;
+   DEL T3's domestic gates run 27–62 with two published bus-gate exceptions
+   (42, 44); HYD uses a published numbering convention where two-digit gate
+   numbers are aerobridges and three-digit numbers are remote bus stands.
+   When the gate is known, this replaces the terminal-wide average at
+   ~0.85–0.95 probability, for **both** the departing flight boarding there
+   and any arriving flight deplaning there.
 2. **"Same as its own arrival" for quick turnarounds.** If a flight's own
    departure gate isn't published yet, but AeroDataBox shows the *same
    aircraft* landed at this airport and is scheduled out again within ~90

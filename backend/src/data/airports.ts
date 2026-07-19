@@ -1,5 +1,10 @@
 import { BoardingMethod } from '../types';
 
+/** Inclusive numeric range as strings, e.g. range(27, 30) => ['27','28','29','30'] - used below for gate lists that are published as a numeric range rather than an enumerable one-off list. */
+function range(start: number, end: number): string[] {
+  return Array.from({ length: end - start + 1 }, (_, i) => String(start + i));
+}
+
 export interface Locality {
   id: string;
   name: string;
@@ -19,9 +24,13 @@ export interface TerminalProfile {
  * gate cannot have an aerobridge (there's nothing to bridge to), while an
  * upper-level gate almost always does. So when the gate number is known,
  * this beats the terminal-wide average by a wide margin. Real, curated gate
- * maps only exist for BLR, MAA, and CJB so far - everywhere else falls back
- * honestly to the terminal-wide average until a specific gate is confirmed
- * by enough crowd reports.
+ * rules exist for BLR, CJB, BOM, DEL (T3 domestic only), and HYD (a
+ * numbering-convention rule, not a hand-verified list - see its own comment)
+ * so far - everywhere else falls back honestly to the terminal-wide average
+ * until a specific gate is confirmed by enough crowd reports. MAA's exact
+ * gate numbers were never published despite the split being known (see its
+ * terminal `reason` text), so it has no gateRules entries even though its
+ * terminal-wide split is a real, cited fact rather than a guess.
  */
 export interface GateRule {
   terminal: string;
@@ -56,11 +65,13 @@ export interface IndianAirport {
 export type OriginAirport = IndianAirport;
 
 /**
- * Domestic-only registry of major Indian airports. Real, verified gate-level
- * layouts only exist for BLR/MAA/CJB (see each terminal's `reason` text for
- * what's actually confirmed vs. a general estimate) - every other airport
- * here uses an honest terminal-wide base rate until crowd reports or a
- * confirmed gate narrow it down.
+ * Domestic-only registry of major Indian airports. See each terminal's
+ * `reason` text for what's actually a cited, sourced fact (a specific
+ * aerobridge/gate count) vs. a genuine best-effort estimate where sources
+ * disagree or don't publish a total - every airport here uses an honest
+ * terminal-wide base rate (falling back further to crowd consensus or a
+ * flat 0.5 toss-up) until a specific gate is either curated (see GateRule
+ * above) or confirmed by enough crowd reports.
  */
 export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
   BLR: {
@@ -168,7 +179,18 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
       T3: { aerobridgeShare: 0.47, reason: 'T3 has 48 contact stands (78 aerobridges, some wide-body stands use two) alongside 54 remote parking bays — under half the total stands are actually contact.' },
     },
     defaultTerminal: 'T3',
-    gateRules: [],
+    gateRules: [
+      // T3 domestic gates run 27-62, with two published exceptions (42, 44)
+      // that are bus gates despite falling in the "domestic aerobridge" range.
+      {
+        terminal: 'T3',
+        gates: range(27, 62).filter((g) => g !== '42' && g !== '44'),
+        method: 'aerobridge',
+        probability: 0.9,
+        note: 'is a T3 domestic aerobridge gate',
+      },
+      { terminal: 'T3', gates: ['42', '44'], method: 'shuttle_bus', probability: 0.9, note: 'is a published bus-boarding exception within the T3 domestic gate range' },
+    ],
     localities: [
       { id: 'connaught-place', name: 'Connaught Place', latitude: 28.6315, longitude: 77.2167, typicalMinutesNoTraffic: 35 },
       { id: 'gurgaon', name: 'Gurgaon', latitude: 28.4595, longitude: 77.0266, typicalMinutesNoTraffic: 40 },
@@ -216,7 +238,16 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
       T1: { aerobridgeShare: 0.44, reason: 'The terminal has 44 aerobridges against 56 remote bus-boarding domestic gates — under half of gates are contact.' },
     },
     defaultTerminal: 'T1',
-    gateRules: [],
+    // Multiple independent airport-guide sources describe a consistent gate-numbering
+    // scheme here: two-digit gate numbers are aerobridge/contact stands on the main
+    // level, three-digit gate numbers are remote bus stands one level down. This is a
+    // numbering CONVENTION, not a hand-verified exhaustive gate list (and doesn't
+    // account for letter-suffixed gates like "30B"), so it's given a slightly lower
+    // probability than a directly-confirmed gate list like BLR's.
+    gateRules: [
+      { terminal: 'T1', gates: range(10, 99), method: 'aerobridge', probability: 0.85, note: 'is a two-digit contact-stand gate at T1 (aerobridge)' },
+      { terminal: 'T1', gates: range(100, 399), method: 'shuttle_bus', probability: 0.85, note: 'is a three-digit remote-stand gate at T1 (bus boarding)' },
+    ],
     localities: [
       { id: 'hitech-city', name: 'HITEC City', latitude: 17.4483, longitude: 78.3915, typicalMinutesNoTraffic: 45 },
       { id: 'banjara-hills', name: 'Banjara Hills', latitude: 17.4156, longitude: 78.4347, typicalMinutesNoTraffic: 40 },
@@ -322,6 +353,9 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     typicalFlightMinutes: 100,
     terminals: {
       T1: { aerobridgeShare: 0.45, reason: 'The domestic terminal (renovated 2018) has 7 aerobridges against a larger total gate count, so remote stands are still common.' },
+      // T2 is a newer domestic terminal some carriers use alongside T1 - its 4
+      // gates are all remote/bus stands, no aerobridges at all.
+      T2: { aerobridgeShare: 0.05, reason: 'T2 (the newer domestic terminal) has 4 gates, all remote bus stands with no aerobridges.' },
       T3: { aerobridgeShare: 0.85, reason: 'The newer international terminal is mostly aerobridge-served.' },
     },
     defaultTerminal: 'T1',
@@ -401,7 +435,8 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 130,
     terminals: {
-      T1: { aerobridgeShare: 0.3, reason: 'A smaller airport that relies mostly on remote stands reached by bus.' },
+      // New terminal opened June 2025; all 5 aerobridges confirmed operational as of early 2026.
+      T1: { aerobridgeShare: 0.38, reason: "Patna's new terminal (opened 2025) has 5 aerobridges against 13 total boarding gates." },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -420,7 +455,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 145,
     terminals: {
-      T1: { aerobridgeShare: 0.5, reason: 'T1 has just 4 aerobridges (6 more planned for the upcoming T3 expansion) — call it a coin flip today.' },
+      T1: { aerobridgeShare: 0.22, reason: 'T1 has 4 aerobridges against 18 total aircraft parking bays (6 more aerobridges are planned alongside the upcoming T3 expansion, not yet built).' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -496,7 +531,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 120,
     terminals: {
-      T1: { aerobridgeShare: 0.35, reason: 'A smaller airport that relies mostly on remote stands reached by bus.' },
+      T1: { aerobridgeShare: 0.38, reason: 'The terminal has 3 aerobridges against 8 total boarding gates.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -515,7 +550,10 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 130,
     terminals: {
-      T1: { aerobridgeShare: 0.35, reason: 'A smaller airport that relies mostly on remote stands reached by bus.' },
+      // Sources disagree on the exact current count (2 vs. 4 aerobridges) and
+      // the total gate count isn't published either way - kept close to a
+      // toss-up rather than overclaiming precision the sources don't have.
+      T1: { aerobridgeShare: 0.45, reason: 'A small single-terminal airport with a handful of aerobridges (published sources disagree on 2 vs. 4) against an unpublished total gate count.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -534,7 +572,9 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 115,
     terminals: {
-      T1: { aerobridgeShare: 0.55, reason: 'A mix of aerobridge and remote stands.' },
+      T1: { aerobridgeShare: 0.5, reason: 'The domestic terminal has 2 aerobridges and 2 remote gates — an even split.' },
+      // T2 handles international flights plus all Air India domestic services.
+      T2: { aerobridgeShare: 0.5, reason: 'T2 has 4 aerobridges plus 3 additional remote jetway/parking positions across its 8 total aircraft stands — roughly an even split.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -553,7 +593,7 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 100,
     terminals: {
-      T1: { aerobridgeShare: 0.45, reason: 'A mix of aerobridge and remote stands.' },
+      T1: { aerobridgeShare: 0.4, reason: 'The terminal has 2 aerobridges against 5 total gates split across two levels.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],
@@ -572,7 +612,10 @@ export const ORIGIN_AIRPORTS: Record<string, IndianAirport> = {
     timezone: 'Asia/Kolkata',
     typicalFlightMinutes: 55,
     terminals: {
-      T1: { aerobridgeShare: 0.35, reason: 'A smaller airport that relies mostly on remote stands reached by bus.' },
+      // Most sources agree most departures here use bus boarding to ground-level
+      // apron positions; the clearest concrete figure available (from an earlier
+      // expansion plan) was 2 aerobridges against 10 total parking bays.
+      T1: { aerobridgeShare: 0.25, reason: 'Most gates here are ground-level bus-boarding positions — around 2 aerobridges against roughly 10 total parking bays.' },
     },
     defaultTerminal: 'T1',
     gateRules: [],

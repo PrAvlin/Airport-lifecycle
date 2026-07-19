@@ -15,6 +15,16 @@ const MAX_REQUESTS_PER_WINDOW = 10;
 
 const hits = new Map<string, { count: number; windowStart: number }>();
 
+// Every distinct caller ever seen would otherwise leave a permanent entry
+// here for the life of the process - a slow but real memory leak on a
+// long-running server. Sweep out anything whose window has already lapsed.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of hits.entries()) {
+    if (now - entry.windowStart >= WINDOW_MS) hits.delete(key);
+  }
+}, WINDOW_MS).unref();
+
 export function reportRateLimit(req: Request, res: Response, next: NextFunction): void {
   const key = req.ip ?? 'unknown';
   const now = Date.now();

@@ -4,6 +4,11 @@ import { BoardingMethod } from '../types';
 
 export type ReportPhase = 'board' | 'deplane';
 
+interface AirportVote {
+  method: BoardingMethod;
+  at: number; // epoch ms - lets old votes age out (see CONSENSUS_MAX_AGE_MS)
+}
+
 /**
  * Raw crowd reports, tracked as one vote per (reporter, flight, phase) - NOT
  * a raw increment-on-every-call counter. Without this, a single caller could
@@ -21,7 +26,16 @@ export type ReportPhase = 'board' | 'deplane';
  * which is the honest, low-effort bar this app can clear without accounts.
  */
 const flightReports = new Map<string, Map<string, BoardingMethod>>();
-const airportReports = new Map<string, Map<string, BoardingMethod>>();
+const airportReports = new Map<string, Map<string, AirportVote>>();
+
+// A gate that was shuttle-only two years ago (before a terminal renovation
+// added aerobridges, say) shouldn't still be dragging down today's estimate
+// forever just because nobody's report ever expires. Votes older than this
+// stop counting toward the tally - and get physically pruned (see
+// pruneExpiredAirportVotes) so the in-memory map and persisted file don't
+// grow unboundedly over the life of a long-running deployment either.
+const CONSENSUS_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 
 function flightKey(flightId: string, phase: ReportPhase): string {
   return `${flightId}:${phase}`;
@@ -39,6 +53,26 @@ function tally(votes: Map<string, BoardingMethod>): Partial<Record<BoardingMetho
   return counts;
 }
 
+function tallyAirportVotes(votes: Map<string, AirportVote>): Partial<Record<BoardingMethod, number>> {
+  const cutoff = Date.now() - CONSENSUS_MAX_AGE_MS;
+  const counts: Partial<Record<BoardingMethod, number>> = {};
+  for (const vote of votes.values()) {
+    if (vote.at < cutoff) continue;
+    counts[vote.method] = (counts[vote.method] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function pruneExpiredAirportVotes(): void {
+  const cutoff = Date.now() - CONSENSUS_MAX_AGE_MS;
+  for (const [aKey, votes] of airportReports.entries()) {
+    for (const [voterKey, vote] of votes.entries()) {
+      if (vote.at < cutoff) votes.delete(voterKey);
+    }
+    if (votes.size === 0) airportReports.delete(aKey);
+  }
+}
+
 // Only the airport-level pool is persisted. Per-flight reports are tied to
 // one scheduled departure that's irrelevant again within a day or two, but
 // the airport pool is explicitly meant to accumulate "across every
@@ -51,20 +85,31 @@ const PERSIST_PATH = path.join(__dirname, '..', '..', '.data', 'airport-reports.
 const SAVE_DEBOUNCE_MS = 2000;
 let saveTimer: NodeJS.Timeout | null = null;
 
+function isAirportVote(value: unknown): value is AirportVote {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('method' in value ? (value as { method: unknown }).method !== undefined : false) &&
+    typeof (value as AirportVote).at === 'number'
+  );
+}
+
 function loadPersisted(): void {
   try {
     const raw = fs.readFileSync(PERSIST_PATH, 'utf-8');
-    const parsed = JSON.parse(raw) as Record<string, Record<string, BoardingMethod>>;
+    const parsed = JSON.parse(raw) as Record<string, Record<string, unknown>>;
     for (const [aKey, votes] of Object.entries(parsed)) {
-      airportReports.set(aKey, new Map(Object.entries(votes)));
+      const validEntries = Object.entries(votes).filter((entry): entry is [string, AirportVote] => isAirportVote(entry[1]));
+      airportReports.set(aKey, new Map(validEntries));
     }
+    pruneExpiredAirportVotes();
   } catch {
-    // No file yet (first run) or unreadable - start empty either way.
+    // No file yet (first run), unreadable, or an older/incompatible format - start empty either way.
   }
 }
 
 function persist(): void {
-  const serializable: Record<string, Record<string, BoardingMethod>> = {};
+  const serializable: Record<string, Record<string, AirportVote>> = {};
   for (const [aKey, votes] of airportReports.entries()) {
     serializable[aKey] = Object.fromEntries(votes);
   }
@@ -82,6 +127,10 @@ function schedulePersist(): void {
 }
 
 loadPersisted();
+setInterval(() => {
+  pruneExpiredAirportVotes();
+  schedulePersist();
+}, PRUNE_INTERVAL_MS).unref();
 
 export function submitReport(
   flightId: string,
@@ -101,11 +150,11 @@ export function submitReport(
   // per-flight tally above (still enough for that exact flight to lock in).
   if (airportIata && airportIata !== 'N/A') {
     const aKey = airportKey(airportIata, phase);
-    const airportVotes = airportReports.get(aKey) ?? new Map<string, BoardingMethod>();
+    const airportVotes = airportReports.get(aKey) ?? new Map<string, AirportVote>();
     // Keyed by reporter+flight (not just reporter) so the same person's
     // honest reports on DIFFERENT flights at this airport each still count -
     // only repeat submissions for the SAME flight collapse into one vote.
-    airportVotes.set(`${reporterId}:${flightId}`, method);
+    airportVotes.set(`${reporterId}:${flightId}`, { method, at: Date.now() });
     airportReports.set(aKey, airportVotes);
     schedulePersist();
   }
@@ -120,5 +169,5 @@ export function getReportCounts(flightId: string, phase: ReportPhase): Partial<R
 
 export function getAirportReportCounts(airportIata: string, phase: ReportPhase): Partial<Record<BoardingMethod, number>> {
   const votes = airportReports.get(airportKey(airportIata, phase));
-  return votes ? tally(votes) : {};
+  return votes ? tallyAirportVotes(votes) : {};
 }

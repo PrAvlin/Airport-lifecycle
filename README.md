@@ -88,13 +88,21 @@ in priority order:
    phase) rather than raw-counted — otherwise a single caller could hit the
    endpoint 3 times and force *any* flight to `confirmed` with a false
    answer. The reporter identity is the caller's IP address (an imperfect,
-   account-free proxy — see `backend/src/services/boardingReports.ts`), and
-   report endpoints are additionally rate-limited to 10 requests/minute per
-   IP (`backend/src/middleware/reportRateLimit.ts`). The airport-level
+   account-free proxy — see `backend/src/services/boardingReports.ts`),
+   resolved via `app.set('trust proxy', 1)` in `server.ts` so it reflects
+   the real client behind the one reverse-proxy hop this app expects
+   (Codespaces/ngrok) rather than either the tunnel's own address or a
+   value an attacker could spoof by hand (a plain `trust proxy: true` would
+   trust an attacker-supplied header, silently defeating this). Report
+   endpoints are additionally rate-limited to 10 requests/minute per IP
+   (`backend/src/middleware/reportRateLimit.ts`). The airport-level
    consensus pool is persisted to a flat JSON file
    (`backend/.data/airport-reports.json`) so it survives a server
    restart/redeploy — it's explicitly meant to accumulate across days, so an
    in-memory-only version would quietly reset that promise every deploy.
+   Individual votes age out of the tally after 180 days (and are pruned
+   from disk on an hourly sweep), so a stale report from before a terminal
+   renovation doesn't outvote current reality forever.
 
 These combine into one of three confidence levels, and the app's behavior
 changes with it — not just the caption. In every case the estimate commits

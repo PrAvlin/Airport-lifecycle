@@ -13,12 +13,17 @@ import { startLivePolling } from './polling/livePoller';
 import { broadcastFlightUpdate, registerSocketHandlers } from './sockets';
 
 const app = express();
-// This app is meant to run behind a Codespaces-forwarded port or an ngrok
-// tunnel (see README) - without this, req.ip resolves to the tunnel's own
-// address for every request, so every passenger would look like the same
-// reporter to the crowd-report dedup/rate-limit (see boardingReports.ts and
-// reportRateLimit.ts), silently capping real consensus at ~1 effective vote.
-app.set('trust proxy', true);
+// This app is meant to run behind exactly one reverse proxy hop (a
+// Codespaces-forwarded port or an ngrok tunnel - see README). Trusting `1`
+// hop (not `true`!) tells Express to use the address that ONE proxy
+// appended to X-Forwarded-For, not whatever a client puts in that header
+// themselves - `true` trusts the entire chain, including client-supplied
+// entries, which would make the crowd-report reporter identity and rate
+// limit (see boardingReports.ts and reportRateLimit.ts) trivially spoofable
+// by anyone willing to set that header. This still assumes there really is
+// a proxy in front in production; a direct, un-proxied deployment of this
+// server should not enable proxy trust at all.
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 

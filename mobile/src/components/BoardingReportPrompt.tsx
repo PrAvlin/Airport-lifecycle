@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { API_BASE_URL } from '../api/client';
+import { submitBoardingReport, submitDeplaneReport } from '../api/client';
 import { BoardingMethod } from '../types';
 import { colors } from '../theme';
 
@@ -24,19 +24,14 @@ export function BoardingReportPrompt({ flightNumber, airport, phase, source = 'f
   async function submit(method: BoardingMethod) {
     setSubmitting(true);
     try {
-      const url =
-        source === 'arrival'
-          ? `${API_BASE_URL}/arrivals/${encodeURIComponent(flightNumber)}/deplane-report`
-          : `${API_BASE_URL}/flights/${encodeURIComponent(flightNumber)}/boarding-report`;
-      const body = source === 'arrival' ? { method, airport } : { phase, method, airport };
-      await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      if (source === 'arrival') {
+        await submitDeplaneReport(flightNumber, method, airport);
+      } else {
+        await submitBoardingReport(flightNumber, phase, method, airport);
+      }
       setSubmitted(true);
     } catch {
-      // Best-effort - if this fails the user can just try again later.
+      // Best-effort - if this fails (including a timeout) the user can just try again.
     } finally {
       setSubmitting(false);
     }

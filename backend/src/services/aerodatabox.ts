@@ -70,14 +70,35 @@ function normalizeFlightNumber(raw: string | undefined): string {
   return (raw ?? 'UNKNOWN').replace(/\s+/g, '').toUpperCase();
 }
 
-function deriveStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
+function deriveDepartureStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
   const mapped = raw ? STATUS_MAP[raw] : undefined;
   if (mapped && mapped !== 'scheduled') return mapped;
 
   const minutesToEvent = Math.round((new Date(estimatedTime).getTime() - Date.now()) / 60_000);
-  if (minutesToEvent <= 5 && minutesToEvent > -60) return 'gate_closed';
+  // More than an hour past its estimated departure with no status from the
+  // source at all almost certainly means it already left - without this, the
+  // fallthrough below would keep calling it "final_call" indefinitely into
+  // the past instead of settling on "departed".
+  if (minutesToEvent <= -60) return 'departed';
+  if (minutesToEvent <= 5) return 'gate_closed';
   if (minutesToEvent <= 10) return 'final_call';
   return mapped ?? 'scheduled';
+}
+
+/**
+ * Arrivals never have a real "boarding"/"final call"/"gate closed" state -
+ * those are departure-side concepts describing what's happening at the gate
+ * the aircraft left FROM, not what's happening as it lands. Reusing
+ * deriveDepartureStatus here would occasionally label a landing flight
+ * "Final Call", which reads as nonsense to a passenger meeting it.
+ */
+function deriveArrivalStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
+  const mapped = raw ? STATUS_MAP[raw] : undefined;
+  if (mapped === 'departed' || mapped === 'cancelled' || mapped === 'delayed') return mapped;
+
+  const minutesToEvent = Math.round((new Date(estimatedTime).getTime() - Date.now()) / 60_000);
+  if (minutesToEvent <= -30) return 'departed'; // i.e. already landed
+  return 'scheduled';
 }
 
 interface QuickTurnInfo {
@@ -166,7 +187,7 @@ function toFlightState(raw: AeroDataBoxFlight, quickTurns: Map<string, QuickTurn
     destination: destinationIata,
     scheduledDeparture: scheduledUtc,
     estimatedDeparture,
-    status: deriveStatus(raw.status, estimatedDeparture),
+    status: deriveDepartureStatus(raw.status, estimatedDeparture),
     terminal,
     gate,
     aircraftType: raw.aircraft?.model,
@@ -234,7 +255,7 @@ function toArrivalFlightState(raw: AeroDataBoxFlight, airport: OriginAirport): A
     destination: airport.iata,
     scheduledArrival: scheduledUtc,
     estimatedArrival,
-    status: deriveStatus(raw.status, estimatedArrival),
+    status: deriveArrivalStatus(raw.status, estimatedArrival),
     terminal,
     gate,
     aircraftType: raw.aircraft?.model,

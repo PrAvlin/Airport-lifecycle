@@ -40,12 +40,18 @@ export function SearchScreen({ navigation }: Props) {
   const [flights, setFlights] = useState<FlightState[]>([]);
   const [arrivals, setArrivals] = useState<ArrivalFlightState[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinguishes "genuinely nothing to show" from "couldn't reach the
+  // backend" - previously both showed the exact same silent empty list,
+  // which is how a wrong apiBaseUrl or blocked port turns into a confusing
+  // "nothing's happening" screen with no clue what's wrong.
+  const [error, setError] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     fetchAirports()
       .then(setAirports)
       .catch(() => setAirports([]));
-  }, []);
+  }, [refreshToken]);
 
   useEffect(() => {
     // Guards against a slow, now-stale request (e.g. from an airport/mode the
@@ -53,13 +59,17 @@ export function SearchScreen({ navigation }: Props) {
     // clobbering the list with out-of-date data.
     let cancelled = false;
     setLoading(true);
+    setError(null);
     if (mode === 'departures') {
       fetchAllFlights(selectedAirport)
         .then((data) => {
           if (!cancelled) setFlights(data);
         })
-        .catch(() => {
-          if (!cancelled) setFlights([]);
+        .catch((err) => {
+          if (!cancelled) {
+            setFlights([]);
+            setError(err.message ?? 'Failed to load departures');
+          }
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -69,8 +79,11 @@ export function SearchScreen({ navigation }: Props) {
         .then((data) => {
           if (!cancelled) setArrivals(data);
         })
-        .catch(() => {
-          if (!cancelled) setArrivals([]);
+        .catch((err) => {
+          if (!cancelled) {
+            setArrivals([]);
+            setError(err.message ?? 'Failed to load arrivals');
+          }
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -79,7 +92,7 @@ export function SearchScreen({ navigation }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [selectedAirport, mode]);
+  }, [selectedAirport, mode, refreshToken]);
 
   const filteredFlights = flights.filter((f) => f.flightNumber.toLowerCase().includes(query.trim().toLowerCase()));
   const filteredArrivals = arrivals.filter((a) =>
@@ -156,6 +169,13 @@ export function SearchScreen({ navigation }: Props) {
 
       {loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
+      ) : error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => setRefreshToken((n) => n + 1)}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : mode === 'departures' ? (
         <FlatList
           data={filteredFlights}
@@ -280,6 +300,24 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   sectionLabel: { color: colors.textSecondary, fontSize: 12, marginTop: 18, marginBottom: 10, letterSpacing: 0.4, textTransform: 'uppercase' },
+  errorBox: {
+    backgroundColor: colors.surface,
+    borderRadius: 14,
+    padding: 18,
+    marginTop: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  errorText: { color: colors.danger, fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  retryButton: {
+    marginTop: 14,
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
+  },
+  retryButtonText: { color: colors.background, fontSize: 13, fontWeight: '700' },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 14,

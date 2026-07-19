@@ -85,7 +85,7 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       },
     );
 
-    // ---- arrival-side stages: touchdown -> deplaning -> immigration -> bags -> exit ----
+    // ---- arrival-side stages: touchdown -> deplaning -> bags -> exit ----
     const minutesToTouchdown = minutesUntil(flight.arrival.estimatedArrival);
     const minutesToGate = minutesToTouchdown + TAXI_TO_STAND_MINUTES;
     const minutesToDeplaningDone = minutesToGate + DISEMBARK_MINUTES;

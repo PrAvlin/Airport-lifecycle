@@ -19,7 +19,7 @@ interface AeroDataBoxMovement {
   baggageBelt?: string;
 }
 
-interface AeroDataBoxFlight {
+export interface AeroDataBoxFlight {
   number?: string;
   status?: string;
   airline?: { name?: string };
@@ -70,7 +70,7 @@ function normalizeFlightNumber(raw: string | undefined): string {
   return (raw ?? 'UNKNOWN').replace(/\s+/g, '').toUpperCase();
 }
 
-function deriveDepartureStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
+export function deriveDepartureStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
   const mapped = raw ? STATUS_MAP[raw] : undefined;
   if (mapped && mapped !== 'scheduled') return mapped;
 
@@ -92,7 +92,7 @@ function deriveDepartureStatus(raw: string | undefined, estimatedTime: string): 
  * deriveDepartureStatus here would occasionally label a landing flight
  * "Final Call", which reads as nonsense to a passenger meeting it.
  */
-function deriveArrivalStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
+export function deriveArrivalStatus(raw: string | undefined, estimatedTime: string): FlightStatus {
   const mapped = raw ? STATUS_MAP[raw] : undefined;
   if (mapped === 'departed' || mapped === 'cancelled' || mapped === 'delayed') return mapped;
 
@@ -101,7 +101,7 @@ function deriveArrivalStatus(raw: string | undefined, estimatedTime: string): Fl
   return 'scheduled';
 }
 
-interface QuickTurnInfo {
+export interface QuickTurnInfo {
   arrivalGate?: string;
   arrivalTerminal?: string;
 }
@@ -113,7 +113,7 @@ interface QuickTurnInfo {
  * for what to expect at departure, since a fast turn almost always reuses
  * the same stand rather than automatically implying an aerobridge.
  */
-function findQuickTurns(arrivals: AeroDataBoxFlight[], departures: AeroDataBoxFlight[]): Map<string, QuickTurnInfo> {
+export function findQuickTurns(arrivals: AeroDataBoxFlight[], departures: AeroDataBoxFlight[]): Map<string, QuickTurnInfo> {
   const arrivalsByReg = new Map<string, { time: Date; gate?: string; terminal?: string }[]>();
   for (const flight of arrivals) {
     const reg = flight.aircraft?.reg;

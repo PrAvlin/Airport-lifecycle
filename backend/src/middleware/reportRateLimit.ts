@@ -25,25 +25,39 @@ setInterval(() => {
   }
 }, WINDOW_MS).unref();
 
-export function reportRateLimit(req: Request, res: Response, next: NextFunction): void {
-  const key = req.ip ?? 'unknown';
-  const now = Date.now();
+interface RateLimitResult {
+  allowed: boolean;
+  retryAfterSeconds?: number;
+}
+
+/** The actual fixed-window decision, kept separate from the Express plumbing so it's directly unit-testable with an injected clock. */
+export function checkRateLimit(key: string, now: number = Date.now()): RateLimitResult {
   const entry = hits.get(key);
 
   if (!entry || now - entry.windowStart >= WINDOW_MS) {
     hits.set(key, { count: 1, windowStart: now });
-    next();
-    return;
+    return { allowed: true };
   }
 
   if (entry.count >= MAX_REQUESTS_PER_WINDOW) {
     const retryAfterSeconds = Math.ceil((entry.windowStart + WINDOW_MS - now) / 1000);
-    res.status(429).set('Retry-After', String(retryAfterSeconds)).json({
-      error: `Too many reports from this device — try again in ${retryAfterSeconds}s.`,
+    return { allowed: false, retryAfterSeconds };
+  }
+
+  entry.count += 1;
+  return { allowed: true };
+}
+
+export function reportRateLimit(req: Request, res: Response, next: NextFunction): void {
+  const key = req.ip ?? 'unknown';
+  const result = checkRateLimit(key);
+
+  if (!result.allowed) {
+    res.status(429).set('Retry-After', String(result.retryAfterSeconds)).json({
+      error: `Too many reports from this device — try again in ${result.retryAfterSeconds}s.`,
     });
     return;
   }
 
-  entry.count += 1;
   next();
 }

@@ -53,8 +53,8 @@ function tally(votes: Map<string, BoardingMethod>): Partial<Record<BoardingMetho
   return counts;
 }
 
-function tallyAirportVotes(votes: Map<string, AirportVote>): Partial<Record<BoardingMethod, number>> {
-  const cutoff = Date.now() - CONSENSUS_MAX_AGE_MS;
+function tallyAirportVotes(votes: Map<string, AirportVote>, now: number): Partial<Record<BoardingMethod, number>> {
+  const cutoff = now - CONSENSUS_MAX_AGE_MS;
   const counts: Partial<Record<BoardingMethod, number>> = {};
   for (const vote of votes.values()) {
     if (vote.at < cutoff) continue;
@@ -123,7 +123,12 @@ function persist(): void {
 
 function schedulePersist(): void {
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(persist, SAVE_DEBOUNCE_MS);
+  // unref'd so a short-lived process (a script, a test run) can exit
+  // immediately rather than hanging for up to SAVE_DEBOUNCE_MS on a pending
+  // write - the real long-running server never intentionally exits, so this
+  // doesn't cost it anything, and losing one debounced write on an abrupt
+  // exit is an acceptable tradeoff for a best-effort cache like this one.
+  saveTimer = setTimeout(persist, SAVE_DEBOUNCE_MS).unref();
 }
 
 loadPersisted();
@@ -138,6 +143,7 @@ export function submitReport(
   method: BoardingMethod,
   airportIata: string,
   reporterId: string,
+  now: number = Date.now(),
 ): Partial<Record<BoardingMethod, number>> {
   const fKey = flightKey(flightId, phase);
   const flightVotes = flightReports.get(fKey) ?? new Map<string, BoardingMethod>();
@@ -154,7 +160,7 @@ export function submitReport(
     // Keyed by reporter+flight (not just reporter) so the same person's
     // honest reports on DIFFERENT flights at this airport each still count -
     // only repeat submissions for the SAME flight collapse into one vote.
-    airportVotes.set(`${reporterId}:${flightId}`, { method, at: Date.now() });
+    airportVotes.set(`${reporterId}:${flightId}`, { method, at: now });
     airportReports.set(aKey, airportVotes);
     schedulePersist();
   }
@@ -167,7 +173,11 @@ export function getReportCounts(flightId: string, phase: ReportPhase): Partial<R
   return votes ? tally(votes) : {};
 }
 
-export function getAirportReportCounts(airportIata: string, phase: ReportPhase): Partial<Record<BoardingMethod, number>> {
+export function getAirportReportCounts(
+  airportIata: string,
+  phase: ReportPhase,
+  now: number = Date.now(),
+): Partial<Record<BoardingMethod, number>> {
   const votes = airportReports.get(airportKey(airportIata, phase));
-  return votes ? tallyAirportVotes(votes) : {};
+  return votes ? tallyAirportVotes(votes, now) : {};
 }

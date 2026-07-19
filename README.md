@@ -182,6 +182,27 @@ can reach the backend.
 
 You can also run it in a browser for quick iteration: `npm run web`.
 
+## Testing
+
+Both `backend` and `mobile` have automated tests using Node's built-in test
+runner (`node:test`) via `ts-node` - no separate test framework dependency.
+
+```bash
+cd backend && npm test   # method-estimate engine, crowd-report dedup/decay,
+                          # rate limiter, status derivation, quick-turn
+                          # detection, and airport data integrity (164 tests)
+cd mobile && npm test    # pure utility functions: IST/timezone formatting,
+                          # duration formatting, the "leave by" calculation
+```
+
+Coverage is deliberately concentrated on the app's actual logic - the
+estimate engine, crowd-report trust mechanism (dedup, rate limiting, decay),
+and live-status derivation - since that's where every real bug found during
+development actually lived, not in UI rendering. There's no React Native
+component-rendering test setup; UI correctness for this project has instead
+been verified by actually running the app (Expo web + Playwright) rather than
+snapshot/shallow-render tests, which tend to pass right through real UX bugs.
+
 ## Notifications
 
 The app requests local notification permissions on launch and fires a

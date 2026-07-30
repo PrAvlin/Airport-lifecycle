@@ -11,6 +11,13 @@ function minutesUntil(iso: string): number {
 const TAXI_TO_STAND_MINUTES = 15;
 const DISEMBARK_MINUTES = 10;
 
+// Real Indian domestic airline policy (IndiGo, Air India, and the industry
+// pattern generally): airport counter check-in closes 60 minutes before
+// departure - a hard operational cutoff, not a courtesy estimate. Shown here
+// so "check-in / bag drop" carries an actual deadline instead of vague
+// "counter allocated on arrival" text with no time pressure attached.
+const CHECKIN_COUNTER_CUTOFF_MINUTES = 60;
+
 /**
  * Summarizes a method estimate for the timeline in one line, honestly
  * reflecting how sure we actually are - never stating "aerobridge" or
@@ -37,6 +44,12 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
     const isBoardingOrLater = ['boarding', 'final_call', 'gate_closed', 'departed'].includes(flight.status);
     const isDeparted = flight.status === 'departed';
 
+    const checkInCutoffTime = new Date(
+      new Date(flight.estimatedDeparture).getTime() - CHECKIN_COUNTER_CUTOFF_MINUTES * 60_000,
+    ).toISOString();
+    const minutesToCheckInCutoff = minutesUntil(checkInCutoffTime);
+    const isPastCheckInCutoff = minutesToCheckInCutoff <= 0;
+
     const stages: JourneyStage[] = [
       {
         id: 'entry',
@@ -48,9 +61,11 @@ export function useJourneyStages(flight: FlightState | null): JourneyStage[] {
       {
         id: 'check_in',
         label: 'Check-in / bag drop',
-        detail: `Terminal ${flight.terminal} · Counter allocated on arrival.`,
-        isDone: true,
-        isActive: false,
+        detail: isPastCheckInCutoff
+          ? `Terminal ${flight.terminal} · Counter check-in has closed (closes 60 min before departure).`
+          : `Terminal ${flight.terminal} · Counter check-in closes by ${formatIstTime(checkInCutoffTime)} (60 min before departure) — already checked in online? Bag drop typically closes 45 min before instead.`,
+        isDone: minutesToBoarding < 60 || isPastCheckInCutoff,
+        isActive: minutesToBoarding >= 60 && !isPastCheckInCutoff,
       },
       {
         id: 'security',

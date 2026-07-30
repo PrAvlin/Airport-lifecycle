@@ -217,5 +217,21 @@ delay, or status transition for the flight currently being tracked.
 
 On the journey screen, pick a locality near your selected airport and the
 app shows the current drive time (live if `TOMTOM_API_KEY` is set) plus a
-suggested "leave home by" time, computed from the flight's boarding start
-time minus drive time, typical security wait, and a fixed terminal buffer.
+suggested "leave home by" time.
+
+Rather than working back from a soft "boarding start" estimate, the
+calculation is anchored to the real, hard operational cutoffs Indian
+domestic carriers (IndiGo, Air India, and the pattern generally) enforce
+before departure — missing these can mean denied boarding even if the
+gate hasn't closed yet:
+
+- **Haven't checked in**: airport counter check-in closes 60 min before departure.
+- **Checked in, have bags**: bag drop closes 45 min before departure.
+- **Checked in, no bags**: only the gate close matters, ~25 min before departure.
+
+Pick your check-in status as a chip on the traffic card; the app defaults
+to the most conservative assumption (not checked in) until you do. The
+"leave by" time is that cutoff, minus drive time, typical security wait,
+and a fixed terminal buffer. The check-in/bag-drop timeline stage is also
+now time-aware — it goes from active to done exactly at the 60-minute
+counter cutoff rather than being permanently shown as already complete.

@@ -1,27 +1,30 @@
 import React from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFlightStatus } from '../hooks/useFlightStatus';
 import { useJourneyStages } from '../hooks/useJourneyStages';
+import { useTraffic } from '../hooks/useTraffic';
 import { StageTimeline } from '../components/StageTimeline';
-import { BoardingMethodBadge } from '../components/BoardingMethodBadge';
+import { DataSourceBadge } from '../components/DataSourceBadge';
+import { MethodEstimateCard } from '../components/MethodEstimateCard';
+import { TrafficCard } from '../components/TrafficCard';
 import { colors, statusColor } from '../theme';
+import { formatDuration, formatIstTime } from '../utils/time';
 import type { RootStackParamList } from '../navigation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Journey'>;
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+const formatTime = formatIstTime;
 
 function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function JourneyScreen({ route }: Props) {
-  const { flightNumber } = route.params;
-  const { flight, loading, error, lastEvent } = useFlightStatus(flightNumber);
+export function JourneyScreen({ route, navigation }: Props) {
+  const { flightNumber, airport } = route.params;
+  const { flight, loading, error, lastEvent, setFlight } = useFlightStatus(flightNumber, airport);
   const stages = useJourneyStages(flight);
+  const traffic = useTraffic(airport);
 
   if (loading && !flight) {
     return (
@@ -35,6 +38,9 @@ export function JourneyScreen({ route }: Props) {
     return (
       <View style={styles.centered}>
         <Text style={styles.error}>{error}</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>← Back to search</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -49,20 +55,26 @@ export function JourneyScreen({ route }: Props) {
           {formatStatus(flight.status)}
         </Text>
       </View>
-      <Text style={styles.route}>
-        {flight.origin} → {flight.destination} · {flight.airline}
-      </Text>
+      <View style={styles.subHeaderRow}>
+        <Text style={styles.route}>
+          {flight.origin} → {flight.arrival.airportCity}
+          {flight.destination !== 'N/A' ? ` (${flight.destination})` : ''} · {flight.airline}
+        </Text>
+        <DataSourceBadge source={flight.dataSource} />
+      </View>
 
       {lastEvent && (
         <View style={styles.liveBanner}>
-          <Text style={styles.liveBannerText}>🔴 Live: {lastEvent.message}</Text>
+          <Text style={styles.liveBannerText}>🔴 {lastEvent.message}</Text>
         </View>
       )}
 
       <View style={styles.infoGrid}>
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Terminal / Gate</Text>
-          <Text style={styles.infoValue}>{flight.terminal} · {flight.gate}</Text>
+          <Text style={styles.infoValue}>
+            {flight.terminal} · {flight.gate === 'TBD' ? 'Not yet published' : flight.gate}
+          </Text>
         </View>
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Departure</Text>
@@ -70,16 +82,64 @@ export function JourneyScreen({ route }: Props) {
         </View>
         <View style={styles.infoBox}>
           <Text style={styles.infoLabel}>Boarding starts</Text>
-          <Text style={styles.infoValue}>{formatTime(flight.boardingStartTime)}</Text>
+          <Text style={styles.infoValue}>
+            {formatTime(flight.boardingStartTime)}
+            {flight.boardingStartConfidence === 'estimated' ? ' (est.)' : ''}
+          </Text>
         </View>
         <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Boarding group</Text>
-          <Text style={styles.infoValue}>{flight.boardingGroup}</Text>
+          <Text style={styles.infoLabel}>Arrival time</Text>
+          <Text style={styles.infoValue}>{formatTime(flight.arrival.estimatedArrival)}</Text>
         </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Arrival terminal / gate</Text>
+          <Text style={styles.infoValue}>
+            {flight.arrival.terminal === 'TBD' ? 'Not yet published' : flight.arrival.terminal} ·{' '}
+            {flight.arrival.gate === 'TBD' ? 'Not yet published' : flight.arrival.gate}
+          </Text>
+        </View>
+        <View style={styles.infoBox}>
+          <Text style={styles.infoLabel}>Flight duration</Text>
+          <Text style={styles.infoValue}>
+            {formatDuration(flight.estimatedDeparture, flight.arrival.estimatedArrival)}
+          </Text>
+        </View>
+        {flight.aircraftType && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoLabel}>Aircraft</Text>
+            <Text style={styles.infoValue}>{flight.aircraftType}</Text>
+          </View>
+        )}
       </View>
 
-      <Text style={styles.sectionTitle}>How you'll board</Text>
-      <BoardingMethodBadge method={flight.boardingMethod} />
+      <MethodEstimateCard
+        key={`${flight.id}:board`}
+        title="How you'll board"
+        estimate={flight.boarding}
+        flightNumber={flight.flightNumber}
+        airport={airport}
+        phase="board"
+        onReported={(boarding) => setFlight({ ...flight, boarding })}
+      />
+
+      <TrafficCard
+        flight={flight}
+        localities={traffic.localities}
+        selectedId={traffic.selectedId}
+        onSelect={traffic.setSelectedId}
+        estimate={traffic.estimate}
+        loading={traffic.loading}
+      />
+
+      <MethodEstimateCard
+        key={`${flight.id}:deplane`}
+        title="How you'll get off the plane"
+        estimate={flight.arrival.disembark}
+        flightNumber={flight.flightNumber}
+        airport={airport}
+        phase="deplane"
+        onReported={(disembark) => setFlight({ ...flight, arrival: { ...flight.arrival, disembark } })}
+      />
 
       <Text style={styles.sectionTitle}>Your journey</Text>
       <StageTimeline stages={stages} />
@@ -91,10 +151,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
   error: { color: colors.danger, fontSize: 15, padding: 20, textAlign: 'center' },
+  backButton: {
+    marginTop: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  backButtonText: { color: colors.textPrimary, fontSize: 14, fontWeight: '600' },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   flightNumber: { color: colors.textPrimary, fontSize: 30, fontWeight: '700' },
   status: { fontSize: 15, fontWeight: '700' },
-  route: { color: colors.textSecondary, fontSize: 14, marginTop: 4 },
+  subHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  route: { color: colors.textSecondary, fontSize: 14 },
   liveBanner: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: 10,

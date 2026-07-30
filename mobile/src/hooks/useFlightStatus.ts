@@ -9,9 +9,11 @@ interface UseFlightStatusResult {
   loading: boolean;
   error: string | null;
   lastEvent: FlightUpdateEvent | null;
+  /** Lets a caller (e.g. after submitting a crowd report) apply a fresher flight immediately, without waiting on the socket/poll. */
+  setFlight: (flight: FlightState) => void;
 }
 
-export function useFlightStatus(flightNumber: string | null): UseFlightStatusResult {
+export function useFlightStatus(flightNumber: string | null, airport: string): UseFlightStatusResult {
   const [flight, setFlight] = useState<FlightState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function useFlightStatus(flightNumber: string | null): UseFlightStatusRes
     setLoading(true);
     setError(null);
 
-    fetchFlight(flightNumber)
+    fetchFlight(flightNumber, airport)
       .then((data) => {
         if (!cancelled) setFlight(data);
       })
@@ -40,7 +42,7 @@ export function useFlightStatus(flightNumber: string | null): UseFlightStatusRes
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('subscribe', flightNumber);
+      socket.emit('subscribe', { flightNumber, airport });
     });
 
     socket.on('flight:snapshot', (payload: { flight: FlightState }) => {
@@ -56,11 +58,11 @@ export function useFlightStatus(flightNumber: string | null): UseFlightStatusRes
 
     return () => {
       cancelled = true;
-      socket.emit('unsubscribe', flightNumber);
+      socket.emit('unsubscribe', { flightNumber, airport });
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [flightNumber]);
+  }, [flightNumber, airport]);
 
-  return { flight, loading, error, lastEvent };
+  return { flight, loading, error, lastEvent, setFlight };
 }

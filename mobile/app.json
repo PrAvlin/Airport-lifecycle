@@ -7,7 +7,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#0b1d3a"
+      "backgroundColor": "#000000"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -17,7 +17,7 @@
     "android": {
       "package": "com.pravlin.airportlifecycle",
       "adaptiveIcon": {
-        "backgroundColor": "#0b1d3a"
+        "backgroundColor": "#000000"
       }
     },
     "plugins": ["expo-notifications"],

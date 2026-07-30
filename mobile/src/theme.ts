@@ -1,14 +1,18 @@
+// Clean black-and-white palette: the app's chrome (backgrounds, borders,
+// selected states) is monochrome; warning/danger/success stay as the only
+// color left, since those are functional signals (delay/cancel/boarding),
+// not decoration.
 export const colors = {
-  background: '#0b1d3a',
-  surface: '#122a4d',
-  surfaceAlt: '#1a3660',
-  border: '#2a4570',
-  textPrimary: '#f4f7fb',
-  textSecondary: '#9fb2d1',
-  accent: '#4fd1c5',
-  warning: '#f6ad55',
-  danger: '#fc8181',
-  success: '#68d391',
+  background: '#000000',
+  surface: '#141414',
+  surfaceAlt: '#1f1f1f',
+  border: '#2c2c2c',
+  textPrimary: '#ffffff',
+  textSecondary: '#9a9a9a',
+  accent: '#ffffff',
+  warning: '#d9a441',
+  danger: '#e2554f',
+  success: '#4caf7d',
 };
 
 export const statusColor: Record<string, string> = {

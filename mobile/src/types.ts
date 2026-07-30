@@ -1,4 +1,4 @@
-export type BoardingMethod = 'jet_bridge' | 'shuttle_bus' | 'walk_to_aircraft';
+export type BoardingMethod = 'aerobridge' | 'shuttle_bus';
 
 export type FlightStatus =
   | 'scheduled'
@@ -9,9 +9,36 @@ export type FlightStatus =
   | 'departed'
   | 'cancelled';
 
+export type DataSource = 'live' | 'demo';
+
 export interface CheckpointEstimate {
   name: string;
   estimatedWaitMinutes: number;
+}
+
+export type MethodConfidenceLevel = 'confirmed' | 'likely' | 'uncertain';
+
+export interface MethodEstimate {
+  method: BoardingMethod;
+  probability: number;
+  confidenceLevel: MethodConfidenceLevel;
+  reasoning: string[];
+  reportCounts: Partial<Record<BoardingMethod, number>>;
+  reportsToConfirm: number;
+}
+
+export interface ArrivalInfo {
+  airportIata: string;
+  airportName: string;
+  airportCity: string;
+  terminal: string;
+  gate: string;
+  timezone: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  disembark: MethodEstimate;
+  baggageBelt?: string;
+  baggageWaitMinutes: number;
 }
 
 export interface FlightState {
@@ -20,20 +47,42 @@ export interface FlightState {
   airline: string;
   origin: string;
   destination: string;
-  isInternational: boolean;
   scheduledDeparture: string;
   estimatedDeparture: string;
   status: FlightStatus;
   terminal: string;
   gate: string;
-  boardingMethod: BoardingMethod;
-  boardingGroup: string;
+  aircraftType?: string;
+  boarding: MethodEstimate;
   boardingStartTime: string;
+  boardingStartConfidence: 'estimated' | 'confirmed';
   checkpoints: {
     security: CheckpointEstimate;
-    immigration?: CheckpointEstimate;
   };
   lastUpdated: string;
+  dataSource: DataSource;
+  arrival: ArrivalInfo;
+}
+
+export interface ArrivalFlightState {
+  id: string;
+  flightNumber: string;
+  airline: string;
+  origin: string;
+  originCity: string;
+  originName: string;
+  destination: string;
+  scheduledArrival: string;
+  estimatedArrival: string;
+  status: FlightStatus;
+  terminal: string;
+  gate: string;
+  aircraftType?: string;
+  disembark: MethodEstimate;
+  baggageBelt?: string;
+  baggageWaitMinutes: number;
+  lastUpdated: string;
+  dataSource: DataSource;
 }
 
 export type FlightUpdateEventType =
@@ -55,10 +104,13 @@ export type JourneyStageId =
   | 'entry'
   | 'check_in'
   | 'security'
-  | 'immigration'
   | 'gate_area'
   | 'boarding'
-  | 'departed';
+  | 'departed'
+  | 'arrival'
+  | 'deplaning'
+  | 'baggage_claim'
+  | 'exit';
 
 export interface JourneyStage {
   id: JourneyStageId;
@@ -66,4 +118,26 @@ export interface JourneyStage {
   detail: string;
   isActive: boolean;
   isDone: boolean;
+}
+
+export interface Locality {
+  id: string;
+  name: string;
+}
+
+export interface AirportSummary {
+  iata: string;
+  name: string;
+  city: string;
+  terminals: string[];
+}
+
+export interface TrafficEstimate {
+  localityId: string;
+  localityName: string;
+  distanceKm: number;
+  durationMinutes: number;
+  typicalDurationMinutes: number;
+  delayMinutes: number;
+  dataSource: DataSource;
 }
